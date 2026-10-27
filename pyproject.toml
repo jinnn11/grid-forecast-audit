@@ -1,0 +1,32 @@
+[project]
+name = "grid-forecast-audit"
+version = "0.1.0"
+description = "Audit of US grid operators' day-ahead demand forecasts from EIA-930 data."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    # Parsing and per-BA stats; the full audit reads ~20 six-month files.
+    "pandas>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "grid_audit"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
