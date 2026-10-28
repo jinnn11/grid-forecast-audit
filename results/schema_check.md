@@ -33,7 +33,7 @@
 
 Reference header: `EIA930_BALANCE_2026_Jan_Jun.csv` (65 columns).
 
-All 22 files have the required columns ("Balancing Authority", "UTC Time at End of Hour", "Demand (MW)", "Demand Forecast (MW)", "Demand (MW) (Imputed)", "Demand (MW) (Adjusted)", "Net Generation (MW)", "Total Interchange (MW)").
+All 22 files have the required columns ("Balancing Authority", "UTC Time at End of Hour", "Demand (MW)", "Demand Forecast (MW)", "Local Time at End of Hour", "Demand (MW) (Imputed)", "Demand (MW) (Adjusted)", "Net Generation (MW)", "Total Interchange (MW)").
 
 ### 2015 H2 to 2018 H1 (19 columns)
 

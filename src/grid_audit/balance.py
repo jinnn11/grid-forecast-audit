@@ -20,7 +20,9 @@ EXTRA_COLUMNS = {
     "Net Generation (MW)": "net_generation",
     "Total Interchange (MW)": "interchange",
 }
-UTC_FORMAT = "%m/%d/%Y %I:%M:%S %p"
+# The BA's own clock (no offset given; an autumn hour repeats). Read when present; NaT otherwise.
+LOCAL_COLUMN = "Local Time at End of Hour"
+UTC_FORMAT = "%m/%d/%Y %I:%M:%S %p"  # local time uses the same format
 
 
 def to_mw(values: pd.Series) -> pd.Series:
@@ -29,12 +31,13 @@ def to_mw(values: pd.Series) -> pd.Series:
 
 
 def read_balance(source: str | Path | IO[str]) -> pd.DataFrame:
-    """One row per BA and hour: ba, utc (end of hour), demand and forecast, then the
-    EXTRA_COLUMNS, all in MW (NaN if blank; an extra column is all NaN when the file lacks it).
+    """One row per BA and hour: ba, utc (end of hour), local (end of hour, naive), demand and
+    forecast, then the EXTRA_COLUMNS, all in MW (NaN if blank; an extra column is all NaN, and
+    local all NaT, when the file lacks it).
 
     Rows are sorted by BA, then time. Raises ValueError on a missing column or a repeated hour.
     """
-    wanted = {*COLUMNS, *EXTRA_COLUMNS}
+    wanted = {*COLUMNS, *EXTRA_COLUMNS, LOCAL_COLUMN}
     raw = pd.read_csv(source, usecols=lambda column: column in wanted, dtype=str)
     missing = [column for column in COLUMNS if column not in raw.columns]
     if missing:
@@ -43,6 +46,11 @@ def read_balance(source: str | Path | IO[str]) -> pd.DataFrame:
         {
             "ba": raw["Balancing Authority"],
             "utc": pd.to_datetime(raw["UTC Time at End of Hour"], format=UTC_FORMAT, utc=True),
+            "local": (
+                pd.to_datetime(raw[LOCAL_COLUMN], format=UTC_FORMAT)
+                if LOCAL_COLUMN in raw.columns
+                else pd.NaT
+            ),
             "demand": to_mw(raw["Demand (MW)"]),
             "forecast": to_mw(raw["Demand Forecast (MW)"]),
         }

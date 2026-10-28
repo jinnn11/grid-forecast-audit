@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Audit of US grid operators' day-ahead demand forecasts from EIA-930 data."
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    # Step 3 figures (PNG only); approved with the step 3 plan on 2026-10-28.
+    "matplotlib>=3.8",
     # Parsing and per-BA stats; the full audit reads ~20 six-month files.
     "pandas>=2.2",
     # pandas needs it to read and write data/processed/balance.parquet.
