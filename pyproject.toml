@@ -6,6 +6,8 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     # Parsing and per-BA stats; the full audit reads ~20 six-month files.
     "pandas>=2.2",
+    # pandas needs it to read and write data/processed/balance.parquet.
+    "pyarrow>=17",
 ]
 
 [dependency-groups]

@@ -131,9 +131,10 @@ def fmt(value: float, decimals: int) -> str:
     return "–" if pd.isna(value) else f"{value:,.{decimals}f}"
 
 
-def markdown_table(header: list[str], rows: list[list[str]]) -> str:
-    """Pipe table with the first column left-aligned and the rest right-aligned."""
-    lines = [header, [":--", *["--:"] * (len(header) - 1)], *rows]
+def markdown_table(header: list[str], rows: list[list[str]], left_columns: int = 1) -> str:
+    """Pipe table with the first `left_columns` columns left-aligned and the rest right-aligned."""
+    align = [":--"] * left_columns + ["--:"] * (len(header) - left_columns)
+    lines = [header, align, *rows]
     return "\n".join("| " + " | ".join(cells) + " |" for cells in lines)
 
 

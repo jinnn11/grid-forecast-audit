@@ -12,6 +12,8 @@ COLUMNS = {
     "Demand (MW)": "demand",
     "Demand Forecast (MW)": "forecast",
 }
+# Read when present; all NaN otherwise. A robustness check for the raw demand series.
+ADJUSTED_DEMAND = "Demand (MW) (Adjusted)"
 UTC_FORMAT = "%m/%d/%Y %I:%M:%S %p"
 
 
@@ -21,17 +23,24 @@ def to_mw(values: pd.Series) -> pd.Series:
 
 
 def read_balance(source: str | Path | IO[str]) -> pd.DataFrame:
-    """One row per BA and hour: ba, utc (end of hour), demand and forecast in MW (NaN if blank).
+    """One row per BA and hour: ba, utc (end of hour), and demand, forecast and demand_adjusted
+    in MW (NaN if blank; demand_adjusted is all NaN when the file has no such column).
 
     Rows are sorted by BA, then time. Raises ValueError on a missing column or a repeated hour.
     """
-    raw = pd.read_csv(source, usecols=list(COLUMNS), dtype=str)
+    wanted = {*COLUMNS, ADJUSTED_DEMAND}
+    raw = pd.read_csv(source, usecols=lambda column: column in wanted, dtype=str)
+    missing = [column for column in COLUMNS if column not in raw.columns]
+    if missing:
+        raise ValueError(f"missing columns: {', '.join(missing)}")
+    adjusted = raw.get(ADJUSTED_DEMAND)
     hourly = pd.DataFrame(
         {
             "ba": raw["Balancing Authority"],
             "utc": pd.to_datetime(raw["UTC Time at End of Hour"], format=UTC_FORMAT, utc=True),
             "demand": to_mw(raw["Demand (MW)"]),
             "forecast": to_mw(raw["Demand Forecast (MW)"]),
+            "demand_adjusted": float("nan") if adjusted is None else to_mw(adjusted),
         }
     )
     repeated = hourly.duplicated(["ba", "utc"])

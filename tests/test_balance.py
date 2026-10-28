@@ -11,7 +11,7 @@ SAMPLE = Path(__file__).parent / "data" / "balance_sample.csv"
 
 def test_read_balance_sample() -> None:
     hourly = read_balance(SAMPLE)
-    assert list(hourly.columns) == ["ba", "utc", "demand", "forecast"]
+    assert list(hourly.columns) == ["ba", "utc", "demand", "forecast", "demand_adjusted"]
     # 26 BIG + 4 SMALL + 2 GEN + 3 NEG rows, sorted by BA then time.
     assert len(hourly) == 35
     assert list(hourly["ba"].drop_duplicates()) == ["BIG", "GEN", "NEG", "SMALL"]
@@ -30,6 +30,29 @@ def test_read_balance_sample() -> None:
 
     gen = hourly[hourly["ba"] == "GEN"]
     assert gen["demand"].isna().all() and gen["forecast"].isna().all()
+    # The sample has the adjusted column, but every value in it is blank.
+    assert hourly["demand_adjusted"].isna().all()
+
+
+def test_read_balance_adjusted_column() -> None:
+    csv = (
+        "Balancing Authority,UTC Time at End of Hour,Demand Forecast (MW),Demand (MW),"
+        "Demand (MW) (Adjusted)\n"
+        'X,01/01/2026 1:00:00 AM,5,5,"1,234"\n'
+        "X,01/01/2026 2:00:00 AM,5,5,\n"
+    )
+    hourly = read_balance(io.StringIO(csv))
+    assert hourly.loc[0, "demand_adjusted"] == 1234.0
+    assert pd.isna(hourly.loc[1, "demand_adjusted"])
+
+
+def test_read_balance_without_adjusted_column() -> None:
+    csv = (
+        "Balancing Authority,UTC Time at End of Hour,Demand Forecast (MW),Demand (MW)\n"
+        "X,01/01/2026 1:00:00 AM,5,5\n"
+    )
+    hourly = read_balance(io.StringIO(csv))
+    assert pd.isna(hourly.loc[0, "demand_adjusted"])
 
 
 def test_to_mw() -> None:

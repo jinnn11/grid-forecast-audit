@@ -15,6 +15,15 @@ def balance_file_name(year: int, half: int) -> str:
     return f"EIA930_BALANCE_{year}_{HALVES[half]}.csv"
 
 
+def balance_file_names(first: tuple[int, int], last: tuple[int, int]) -> list[str]:
+    """BALANCE file names from `first` to `last` inclusive, each given as (year, half)."""
+    (year, half), names = first, []
+    while (year, half) <= last:
+        names.append(balance_file_name(year, half))
+        year, half = (year, 2) if half == 1 else (year + 1, 1)
+    return names
+
+
 def fetch(name: str, raw_dir: Path = RAW_DIR, base_url: str = BASE_URL) -> Path:
     """Return the cached path of `name`, downloading it only if it is not cached yet."""
     path = raw_dir / name
