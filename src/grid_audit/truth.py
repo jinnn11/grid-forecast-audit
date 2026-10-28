@@ -13,8 +13,11 @@ from grid_audit.quality import half_years
 BALANCE_TOLERANCE_MW = 1.0  # values are whole MW, so rounding can leave a 1 MW gap
 R5_SHARE = 0.10  # approved 2026-10-28: the go/no-go check's upper bound for a plausible MAPE
 # R5 exception rule (user, 2026-10-28). The user set the 30 days, 3 months and 10%; the episode
-# definition (day share and gap) is ours.
-EPISODE_DAY_SHARE = 0.5  # a day is out of balance when at least half its checkable hours are
+# definition (day share and gap) is ours. Hour-of-day episodes were added on 2026-10-28, before any
+# forecast error was computed, because daily episodes cannot see a mismatch confined to the same
+# hours of each day.
+EPISODE_DAY_SHARE = 0.5  # a day is out of balance when at least half its checkable hours are;
+# for hour-of-day episodes, the hour must be out of balance on at least this share of the days
 EPISODE_GAP_DAYS = 7  # out-of-balance days at most this many days apart join one episode
 EXEMPTION_MIN_DAYS = 30  # only episodes longer than this are checked
 EXEMPTION_MONTHS = 3
@@ -171,30 +174,94 @@ def imbalance_episodes(
     spans = []
     for ba, daily in share.groupby(level=0):
         bad = daily.droplevel(0).index[daily.to_numpy() >= day_share]
-        if bad.empty:
-            continue
-        start = previous = bad[0]
-        for current in bad[1:]:
-            if (current - previous).days - 1 > gap_days:
-                spans.append((ba, start, previous))
-                start = current
-            previous = current
-        spans.append((ba, start, previous))
-    episodes = pd.DataFrame(spans, columns=["ba", "start", "end"])
+        spans += [(ba, start, end) for start, end in join_days(bad, gap_days)]
+    return with_days(pd.DataFrame(spans, columns=["ba", "start", "end"]))
+
+
+def with_days(episodes: pd.DataFrame) -> pd.DataFrame:
+    """Episode spans with UTC start and end days (also when there are none) and their length."""
+    for column in ("start", "end"):
+        episodes[column] = pd.to_datetime(episodes[column], utc=True)
     episodes["days"] = (episodes["end"] - episodes["start"]).dt.days + 1
     return episodes
 
 
+def join_days(days: pd.Index, gap_days: int) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    """First and last day of each run of sorted `days`, where runs join across at most
+    `gap_days` missing days."""
+    spans: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+    for current in days:
+        if spans and (current - spans[-1][1]).days - 1 <= gap_days:
+            spans[-1] = (spans[-1][0], current)
+        else:
+            spans.append((current, current))
+    return spans
+
+
+def hour_episodes(
+    hourly: pd.DataFrame,
+    unbalanced: pd.Series,
+    exclude: pd.Series,
+    min_share: float = EPISODE_DAY_SHARE,
+    gap_days: int = EPISODE_GAP_DAYS,
+) -> pd.DataFrame:
+    """Per BA and UTC hour of the day (of the hour-end time), spans of days on which that hour
+    is `unbalanced`, joined when at most `gap_days` days lie between them. Only checkable hours
+    outside `exclude` count. A span is kept when its hour is out of balance on at least
+    `min_share` of the span's checkable days.
+
+    Columns: ba, hour, start, end and days, as in imbalance_episodes.
+    """
+    rows = checkable(hourly) & ~exclude
+    frame = pd.DataFrame(
+        {
+            "ba": hourly["ba"],
+            "hour": hourly["utc"].dt.hour,
+            "day": hourly["utc"].dt.floor("D"),
+            "bad": unbalanced,
+        }
+    )[rows].sort_values(["ba", "hour", "day"])
+    spans = []
+    for (ba, hour), group in frame.groupby(["ba", "hour"]):
+        bad_days = pd.DatetimeIndex(group.loc[group["bad"], "day"])
+        for start, end in join_days(bad_days, gap_days):
+            if group.loc[group["day"].between(start, end), "bad"].mean() >= min_share:
+                spans.append((ba, hour, start, end))
+    episodes = pd.DataFrame(spans, columns=["ba", "hour", "start", "end"])
+    episodes["hour"] = episodes["hour"].astype("Int64")
+    return with_days(episodes)
+
+
+def mismatch_episodes(
+    hourly: pd.DataFrame,
+    unbalanced: pd.Series,
+    gap_days: int = EPISODE_GAP_DAYS,
+    min_days: int = EXEMPTION_MIN_DAYS,
+) -> pd.DataFrame:
+    """Daily episodes (hour <NA>), then hour-of-day episodes found among the out-of-balance
+    hours outside the daily episodes longer than `min_days` (the ones the exception rule
+    checks), so each hour is judged by at most one checked episode."""
+    daily = imbalance_episodes(hourly, unbalanced, gap_days=gap_days)
+    checked = in_episodes(hourly, daily[daily["days"] > min_days])
+    hours = hour_episodes(hourly, unbalanced, checked, gap_days=gap_days)
+    daily.insert(1, "hour", pd.array([pd.NA] * len(daily), dtype="Int64"))
+    return pd.concat([daily, hours], ignore_index=True)
+
+
 def level_change(
-    rows: pd.DataFrame, start: pd.Timestamp, months: int = EXEMPTION_MONTHS
+    rows: pd.DataFrame,
+    start: pd.Timestamp,
+    months: int = EXEMPTION_MONTHS,
+    hours_per_day: int = 24,
 ) -> dict[str, float]:
-    """For one BA's rows: medians over checkable hours with positive demand in the `months`
-    months from `start` and in the same months a year earlier.
+    """For one BA's rows (all hours, or `hours_per_day` hours of each day): medians over
+    checkable hours with positive demand in the `months` months from `start` and in the same
+    months a year earlier.
 
     Returns the demand change as a share of the earlier median demand, and the net generation
     and interchange shifts (later minus earlier median) as shares of the same earlier demand.
-    All NaN when either window has such hours for less than EXEMPTION_MIN_COVERAGE of its
-    length, or the earlier median demand is not positive.
+    All NaN when either window has such hours for less than EXEMPTION_MIN_COVERAGE of the hours
+    it could hold, or the earlier median demand is not positive.
     """
     nan = dict.fromkeys(["demand_change", *SHIFTS], float("nan"))
     usable = rows[checkable(rows) & rows["demand"].gt(0)]
@@ -202,7 +269,8 @@ def level_change(
     for first in (start - pd.DateOffset(years=1), start):
         last = first + pd.DateOffset(months=months)
         window = usable[usable["utc"].ge(first) & usable["utc"].lt(last)]
-        if len(window) < EXEMPTION_MIN_COVERAGE * (last - first) / pd.Timedelta(hours=1):
+        possible = (last - first) / pd.Timedelta(hours=1) * hours_per_day / 24
+        if len(window) < EXEMPTION_MIN_COVERAGE * possible:
             return nan
         medians.append(window[["demand", "net_generation", "interchange"]].median())
     before, after = medians
@@ -224,10 +292,16 @@ def exemption_checks(
     """The R5 exception rule for each episode longer than `min_days`: level_change columns, and
     `exempt` when demand changed by at most `share` while net generation or interchange shifted
     by more than `share` of demand. `attributed_to` names the shifted series; `reason` says why
-    an episode is not exempt."""
+    an episode is not exempt. An hour-of-day episode (`hour` set) is measured on its own hour."""
     rows = []
     for episode in episodes[episodes["days"] > min_days].itertuples(index=False):
-        change = level_change(hourly[hourly["ba"].eq(episode.ba)], episode.start)
+        ba_rows = hourly[hourly["ba"].eq(episode.ba)]
+        hour = getattr(episode, "hour", pd.NA)
+        if pd.isna(hour):
+            change = level_change(ba_rows, episode.start)
+        else:
+            at_hour = ba_rows[ba_rows["utc"].dt.hour.eq(hour)]
+            change = level_change(at_hour, episode.start, hours_per_day=1)
         shifted = [name for key, name in SHIFTS.items() if abs(change[key]) > share]
         if pd.isna(change["demand_change"]):
             reason = "too little data to compare"
@@ -245,9 +319,13 @@ def exemption_checks(
 
 
 def in_episodes(hourly: pd.DataFrame, episodes: pd.DataFrame) -> pd.Series:
-    """Hours of an episode's BA from the start of its first day to the end of its last day."""
+    """Hours of an episode's BA from the start of its first day to the end of its last day; for
+    an hour-of-day episode (`hour` set), only that UTC hour of each day."""
     flags = pd.Series(False, index=hourly.index)
     day = hourly["utc"].dt.floor("D")
+    hour_of_day = hourly["utc"].dt.hour
     for episode in episodes.itertuples():
-        flags |= hourly["ba"].eq(episode.ba) & day.ge(episode.start) & day.le(episode.end)
+        inside = hourly["ba"].eq(episode.ba) & day.ge(episode.start) & day.le(episode.end)
+        hour = getattr(episode, "hour", pd.NA)
+        flags |= inside if pd.isna(hour) else inside & hour_of_day.eq(hour)
     return flags

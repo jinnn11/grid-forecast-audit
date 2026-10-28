@@ -85,6 +85,7 @@ def test_exemptions_table(hourly: pd.DataFrame, events: pd.DataFrame) -> None:
     assert table.to_dict("records") == [
         {
             "ba": "G",
+            "hour_utc": "",  # a daily episode
             "first_day": "2017-01-01",
             "last_day": "2017-03-31",
             "days": 90,
@@ -102,8 +103,10 @@ def test_render_data_quality(hourly: pd.DataFrame, events: pd.DataFrame) -> None
     page = render_data_quality(hourly, events, apply_rules(hourly, events))
     assert "- Usable: 19,728 hours, 90.1% of all BA-hours" in page  # 19,728 / 21,888
     assert "| R5 | Demand more than 10%" in page and "| 2,160 | 2,160 | 1 |" in page
-    assert "2 episodes checked, 1 exempt. The exemptions give back 2,160 hours" in page
-    assert "| G | 2,160 | 19.7 |" in page  # 2,160 of G's 10,944 hours
+    # Both BAs' 2017 hours sit in checked daily episodes, so no hour-of-day episode is searched.
+    assert "2 daily and 0 hour-of-day episodes checked; 1 and 0 exempt." in page
+    assert "The exemptions give back 2,160 hours" in page
+    assert "| G | 2,160 | 0 | 2,160 | 19.7 |" in page  # 2,160 of G's 10,944 hours
     # D's demand: median 133 vs 103, +29.1%; its generation median is 153 both years.
     span = "| 2017-01-01 | 2017-03-31 | 90 | 2,160 |"
     assert f"| D {span} 29.1 | 0.0 | 0.0 | R5 applies: demand changed |" in page

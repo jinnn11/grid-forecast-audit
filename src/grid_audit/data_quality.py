@@ -36,9 +36,9 @@ from grid_audit.truth import (
     R5_SHARE,
     eia_changed,
     exemption_checks,
-    imbalance_episodes,
     imbalanced,
     in_episodes,
+    mismatch_episodes,
 )
 from grid_audit.truth_check import pct_cell
 
@@ -66,8 +66,9 @@ class Applied:
 def exempted_hours(
     hourly: pd.DataFrame, unbalanced: pd.Series, gap_days: int = EPISODE_GAP_DAYS
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """The exception rule's checks, and the hours inside exempted episodes."""
-    checks = exemption_checks(hourly, imbalance_episodes(hourly, unbalanced, gap_days=gap_days))
+    """The exception rule's checks (daily and hour-of-day episodes), and the hours inside
+    exempted episodes."""
+    checks = exemption_checks(hourly, mismatch_episodes(hourly, unbalanced, gap_days=gap_days))
     return checks, in_episodes(hourly, checks[checks["exempt"]])
 
 
@@ -99,21 +100,36 @@ def survivors_of_r1_to_r4(hourly: pd.DataFrame, applied: Applied) -> pd.Series:
     return survivors
 
 
+def hours_inside(hourly: pd.DataFrame, flags: pd.Series, episodes: pd.DataFrame) -> list[int]:
+    """For each episode, the hours inside it where `flags` is true."""
+    rows_of = hourly.groupby("ba").indices
+    counts = []
+    for episode in episodes.itertuples(index=False):
+        rows = rows_of[episode.ba]
+        inside = in_episodes(hourly.iloc[rows], pd.DataFrame([episode._asdict()]))
+        counts.append(int(flags.iloc[rows][inside.to_numpy()].sum()))
+    return counts
+
+
 def exemptions_table(hourly: pd.DataFrame, applied: Applied) -> pd.DataFrame:
-    """data/balance_exemptions.csv: one row per exempted episode with its evidence."""
-    survivors = survivors_of_r1_to_r4(hourly, applied)
+    """data/balance_exemptions.csv: one row per exempted episode with its evidence. `hour_utc`
+    is blank for a daily episode and the UTC hour for an hour-of-day episode."""
+    exempt = applied.checks[applied.checks["exempt"]]
+    given_back = survivors_of_r1_to_r4(hourly, applied) & applied.unbalanced
     rows = []
-    for episode in applied.checks[applied.checks["exempt"]].itertuples(index=False):
-        inside = in_episodes(hourly, pd.DataFrame([episode._asdict()]))
+    for episode, hours in zip(
+        exempt.itertuples(index=False), hours_inside(hourly, given_back, exempt), strict=True
+    ):
         after = episode.start + pd.DateOffset(months=EXEMPTION_MONTHS) - pd.Timedelta(days=1)
         year = pd.DateOffset(years=1)
         rows.append(
             {
                 "ba": episode.ba,
+                "hour_utc": "" if pd.isna(episode.hour) else int(episode.hour),
                 "first_day": f"{episode.start:%Y-%m-%d}",
                 "last_day": f"{episode.end:%Y-%m-%d}",
                 "days": episode.days,
-                "hours_given_back": int((survivors & applied.unbalanced & inside).sum()),
+                "hours_given_back": hours,
                 "compared": f"{episode.start:%Y-%m-%d} to {after:%Y-%m-%d} vs "
                 f"{episode.start - year:%Y-%m-%d} to {after - year:%Y-%m-%d}",
                 "demand_change_pct": round(100 * episode.demand_change, 1),
@@ -122,7 +138,7 @@ def exemptions_table(hourly: pd.DataFrame, applied: Applied) -> pd.DataFrame:
                 "attributed_to": episode.attributed_to,
             }
         )
-    columns = ["ba", "first_day", "last_day", "days", "hours_given_back", "compared"]
+    columns = ["ba", "hour_utc", "first_day", "last_day", "days", "hours_given_back", "compared"]
     columns += ["demand_change_pct", "net_generation_shift_pct", "interchange_shift_pct"]
     return pd.DataFrame(rows, columns=[*columns, "attributed_to"])
 
@@ -172,30 +188,53 @@ def render_data_quality(hourly: pd.DataFrame, events: pd.DataFrame, applied: App
     # Exception rule
     checks = applied.checks
     exempt = checks[checks["exempt"]]
-    back_by_ba = removed_by_ba(hourly, applied.given_back)
-    back_rows = [[str(b), fmt(r.hours, 0), fmt(r.pct, 1)] for b, r in back_by_ba.iterrows()]
-    survivors = survivors_of_r1_to_r4(hourly, applied)
-    check_rows = []
-    for episode in checks.itertuples(index=False):
-        inside = in_episodes(hourly, pd.DataFrame([episode._asdict()]))
-        decision = (
+    is_daily = checks["hour"].isna()
+    back_daily = applied.given_back & in_episodes(hourly, exempt[exempt["hour"].isna()])
+    by_kind = pd.DataFrame(
+        {
+            "daily": back_daily.groupby(ba).sum(),
+            "hour": (applied.given_back & ~back_daily).groupby(ba).sum(),
+        }
+    )
+    back_rows = [
+        [str(b), fmt(by_kind.loc[b, "daily"], 0), fmt(by_kind.loc[b, "hour"], 0)]
+        + [fmt(r.hours, 0), fmt(r.pct, 1)]
+        for b, r in removed_by_ba(hourly, applied.given_back).iterrows()
+    ]
+    left = survivors_of_r1_to_r4(hourly, applied) & applied.unbalanced
+    check_rows = [
+        [
+            episode.ba,
+            "all" if pd.isna(episode.hour) else f"{int(episode.hour):02d}",
+            f"{episode.start:%Y-%m-%d}",
+            f"{episode.end:%Y-%m-%d}",
+            fmt(episode.days, 0),
+            fmt(hours, 0),
+            fmt(100 * episode.demand_change, 1),
+            fmt(100 * episode.generation_shift, 1),
+            fmt(100 * episode.interchange_shift, 1),
             f"exempt: {episode.attributed_to}"
             if episode.exempt
-            else f"R5 applies: {episode.reason}"
+            else f"R5 applies: {episode.reason}",
+        ]
+        for episode, hours in zip(
+            checks.itertuples(index=False), hours_inside(hourly, left, checks), strict=True
         )
-        check_rows.append(
-            [
-                episode.ba,
-                f"{episode.start:%Y-%m-%d}",
-                f"{episode.end:%Y-%m-%d}",
-                fmt(episode.days, 0),
-                fmt((survivors & applied.unbalanced & inside).sum(), 0),
-                fmt(100 * episode.demand_change, 1),
-                fmt(100 * episode.generation_shift, 1),
-                fmt(100 * episode.interchange_shift, 1),
-                decision,
-            ]
-        )
+    ]
+    daily_rows = [
+        row[:1] + row[2:] for row, daily in zip(check_rows, is_daily, strict=True) if daily
+    ]
+    hour_rows = [row for row, daily in zip(check_rows, is_daily, strict=True) if not daily]
+    episode_header = [
+        "First day",
+        "Last day",
+        "Days",
+        "Hours",
+        "Demand change (%)",
+        "Net generation shift (%)",
+        "Interchange shift (%)",
+        "Decision",
+    ]
     sensitivity_rows = [
         [
             str(r.gap) + (" (used)" if r.gap == EPISODE_GAP_DAYS else ""),
@@ -274,14 +313,20 @@ def render_data_quality(hourly: pd.DataFrame, events: pd.DataFrame, applied: App
         )
         + "\n",
         "## R5 exception rule\n",
-        f"- A mismatch episode is a span of UTC days on which at least "
-        f"{EPISODE_DAY_SHARE:.0%} of the BA's checkable hours are out of balance by more than "
-        f"{pct}; such days at most {EPISODE_GAP_DAYS} days apart join one episode. Episodes "
-        f"longer than {EXEMPTION_MIN_DAYS} days are checked.",
-        f"- The check compares medians over checkable hours with positive demand in the "
-        f"{EXEMPTION_MONTHS} calendar months from the episode's first day and in the same months "
-        f"a year earlier. Each window needs such hours for at least "
-        f"{EXEMPTION_MIN_COVERAGE:.0%} of its length.",
+        f"- Daily episodes: spans of UTC days on which at least {EPISODE_DAY_SHARE:.0%} of the "
+        f"BA's checkable hours are out of balance by more than {pct}; such days at most "
+        f"{EPISODE_GAP_DAYS} days apart join one episode.",
+        "- Hour-of-day episodes (added 2026-10-28, before any forecast error was computed, because "
+        "daily episodes cannot see a mismatch confined to the same hours of each day): for each "
+        "UTC hour of the day, spans of days on which that hour is out of balance, joined the same "
+        f"way, kept when the hour is out of balance on at least {EPISODE_DAY_SHARE:.0%} of the "
+        "span's checkable days. They are searched only among hours outside the checked daily "
+        "episodes, so each hour is judged by at most one checked episode.",
+        f"- Episodes longer than {EXEMPTION_MIN_DAYS} days are checked. The check compares "
+        f"medians over checkable hours with positive demand in the {EXEMPTION_MONTHS} calendar "
+        "months from the episode's first day and in the same months a year earlier; an "
+        "hour-of-day episode is measured on its own hour. Each window needs such hours for at "
+        f"least {EXEMPTION_MIN_COVERAGE:.0%} of the hours it could hold.",
         f"- The episode is exempt when demand changed by at most {EXEMPTION_SHARE:.0%} while net "
         f"generation or interchange shifted by more than {EXEMPTION_SHARE:.0%} of the earlier "
         "demand. Its demand is kept: R5 drops none of its hours. Exemptions and their evidence "
@@ -290,36 +335,31 @@ def render_data_quality(hourly: pd.DataFrame, events: pd.DataFrame, applied: App
         f"up to {fmt(hourly.loc[ba.eq('SEC'), 'net_generation'].max(), 0)} MW).\n"
         if "SEC" in order
         else "- Medians, because single absurd values would swing means.\n",
-        f"{len(checks)} episodes checked, {len(exempt)} exempt. The exemptions give back "
-        f"{fmt(applied.given_back.sum(), 0)} hours that R5 would otherwise drop after R1-R4.\n",
+        f"{int(is_daily.sum())} daily and {int((~is_daily).sum())} hour-of-day episodes checked; "
+        f"{int(exempt['hour'].isna().sum())} and {int(exempt['hour'].notna().sum())} exempt. The "
+        f"exemptions give back {fmt(applied.given_back.sum(), 0)} hours that R5 would otherwise "
+        "drop after R1-R4.\n",
         "### Hours given back, by BA\n",
         (
             markdown_table(
-                ["BA", "Hours given back", "% of the BA's hours with both values"], back_rows
+                [
+                    "BA",
+                    "Daily episodes",
+                    "Hour-of-day episodes",
+                    "Total",
+                    "% of the BA's hours with both values",
+                ],
+                back_rows,
             )
             if back_rows
             else "None."
         )
         + "\n",
-        "### Episodes checked\n",
+        "### Daily episodes checked\n",
         "Shifts are later minus earlier medians, as a percent of the earlier median demand. "
-        '"Hours" counts out-of-balance hours left after R1-R4.\n',
-        markdown_table(
-            [
-                "BA",
-                "First day",
-                "Last day",
-                "Days",
-                "Hours",
-                "Demand change (%)",
-                "Net generation shift (%)",
-                "Interchange shift (%)",
-                "Decision",
-            ],
-            check_rows,
-            left_columns=1,
-        )
-        + "\n",
+        '"Hours" counts out-of-balance hours left after R1-R4. Hour-of-day episodes are listed '
+        "at the end of this page.\n",
+        markdown_table(["BA", *episode_header], daily_rows) + "\n",
         "### How the episode gap affects the result\n",
         markdown_table(
             ["Gap (days)", "Episodes checked", "Exempt", "Hours given back"], sensitivity_rows
@@ -347,6 +387,11 @@ def render_data_quality(hourly: pd.DataFrame, events: pd.DataFrame, applied: App
         + "\n",
         "### Demand level shifts\n",
         markdown_table(["Date", "BA", "Evidence"], kept_rows, left_columns=3) + "\n",
+        "## Hour-of-day episodes checked\n",
+        'As the daily table; "Hour" is the UTC hour of the hour-end time, and each episode is '
+        "measured on that hour only.\n",
+        (markdown_table(["BA", "Hour (UTC)", *episode_header], hour_rows) if hour_rows else "None.")
+        + "\n",
     ]
     return "\n".join(lines)
 

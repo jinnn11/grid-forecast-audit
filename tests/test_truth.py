@@ -7,10 +7,13 @@ from grid_audit.truth import (
     eia_changed,
     eia_relations,
     exemption_checks,
+    hour_episodes,
     imbalance_episodes,
     imbalanced,
     in_episodes,
+    join_days,
     level_change,
+    mismatch_episodes,
     share_by_half_year,
     sign_fit,
     stretch_coverage,
@@ -265,3 +268,119 @@ def test_in_episodes() -> None:
     )
     episodes = pd.DataFrame({"ba": ["X"], "start": [utc("2016-01-02")], "end": [utc("2016-01-03")]})
     assert in_episodes(hourly, episodes).tolist() == [False, True, True, False, False]
+
+
+def test_join_days() -> None:
+    days = pd.DatetimeIndex([utc(f"2016-01-{d:02d}") for d in (1, 2, 5, 14, 15)])
+    # 2 to 5 leaves 2 missing days (joined at gap 2); 5 to 14 leaves 8 (not joined at gap 7).
+    assert [(a.day, b.day) for a, b in join_days(days, 7)] == [(1, 5), (14, 15)]
+    assert [(a.day, b.day) for a, b in join_days(days, 1)] == [(1, 2), (5, 5), (14, 15)]
+    assert join_days(pd.DatetimeIndex([]), 7) == []
+
+
+def three_hour_days(bas: dict[str, dict[int, set[int]]], days: int = 60) -> tuple:
+    """Rows at 06:00, 12:00 and 18:00 UTC on days 1..`days` from 2016-01-01, all checkable, and
+    flags that are true on the given days for each BA and hour."""
+    rows, flags = [], []
+    for ba, bad in bas.items():
+        for day in range(1, days + 1):
+            for hour in (6, 12, 18):
+                when = utc("2016-01-01") + pd.Timedelta(days=day - 1, hours=hour)
+                rows.append((ba, when, 1.0, 1.0, 0.0))
+                flags.append(day in bad.get(hour, set()))
+    columns = ["ba", "utc", "demand", "net_generation", "interchange"]
+    return pd.DataFrame(rows, columns=columns), pd.Series(flags)
+
+
+# X: 18:00 is out of balance on days 1-9 and 13-40 (37 of the 40 days in the span); 12:00 on
+# every fifth day, 1, 6, ..., 56 (12 of 56 days); 06:00 never.
+X_BAD = {18: set(range(1, 10)) | set(range(13, 41)), 12: set(range(1, 57, 5))}
+
+
+def test_hour_episodes() -> None:
+    hourly, unbalanced = three_hour_days({"X": X_BAD})
+    none = pd.Series(False, index=hourly.index)
+
+    def spans(exclude: pd.Series, **kwargs: float) -> list[tuple[int, str, str, int]]:
+        table = hour_episodes(hourly, unbalanced, exclude, **kwargs)
+        return [(r.hour, f"{r.start:%m-%d}", f"{r.end:%m-%d}", r.days) for r in table.itertuples()]
+
+    # 18:00: the 3 missing days join; 37 of 40 days is over half. 12:00: gaps of 4 days chain
+    # days 1-56, but 12 of 56 days is under half, so it is dropped.
+    assert spans(none) == [(18, "01-01", "02-09", 40)]
+    assert spans(none, min_share=0.2) == [(12, "01-01", "02-25", 56), (18, "01-01", "02-09", 40)]
+    # Excluding days 1-20 leaves 18:00 out of balance on days 21-40.
+    early = hourly["utc"].lt(utc("2016-01-21"))
+    assert spans(early) == [(18, "01-21", "02-09", 20)]
+
+
+def test_mismatch_episodes() -> None:
+    # X: at least 2 of 3 hours are out on days 1, 6, 16, 21, 26, 31 and 36 only (day 11 has
+    # 12:00 alone), giving daily spans 1-6 and 16-36, both too short to check. So the 18:00
+    # pattern is found as an hour-of-day episode.
+    # Y: every hour is out on days 1-40, a 40-day daily episode that is checked, so its hours
+    # are not searched again by hour.
+    y_bad = dict.fromkeys((6, 12, 18), set(range(1, 41)))
+    hourly, unbalanced = three_hour_days({"X": X_BAD, "Y": y_bad})
+    table = mismatch_episodes(hourly, unbalanced)
+    rows = [
+        (r.ba, None if pd.isna(r.hour) else r.hour, f"{r.start:%m-%d}", r.days)
+        for r in table.itertuples()
+    ]
+    assert rows == [
+        ("X", None, "01-01", 6),
+        ("X", None, "01-16", 21),
+        ("Y", None, "01-01", 40),
+        ("X", 18, "01-01", 40),
+    ]
+
+
+def test_level_change_one_hour_a_day() -> None:
+    rows = windows("G", before=(100, 150, 50), after=(105, 130, 50), months=1)
+    noon = rows[rows["utc"].dt.hour.eq(12)]  # 31 rows in each January
+    # One hour a day: a 744-hour window could hold 31 such hours, and all 31 are there.
+    change = level_change(noon, utc("2017-01-01"), months=1, hours_per_day=1)
+    assert change["generation_shift"] == pytest.approx(-0.20)
+    # Read as all-hours data, 31 rows are under half of 744.
+    assert pd.isna(level_change(noon, utc("2017-01-01"), months=1)["demand_change"])
+
+
+def test_exemption_checks_measures_hour_episodes_on_their_hour() -> None:
+    # H: demand 100, net generation 150 and interchange 50 at every hour of Jan-Mar 2016 and
+    # 2017, except that net generation at 12:00 UTC falls to 110 in 2017.
+    hourly = windows("H", (100, 150, 50), (100, 150, 50))
+    noon_2017 = hourly["utc"].ge(utc("2017-01-01")) & hourly["utc"].dt.hour.eq(12)
+    hourly.loc[noon_2017, "net_generation"] = 110.0
+    episodes = pd.DataFrame(
+        {
+            "ba": ["H", "H"],
+            "hour": pd.array([pd.NA, 12], dtype="Int64"),
+            "start": utc("2017-01-01"),
+            "end": utc("2017-03-01"),
+            "days": 60,
+        }
+    )
+    checks = exemption_checks(hourly, episodes)
+    # All hours: 23 of 24 hours still at 150, so the median shift is 0. At 12:00 alone:
+    # (110 - 150) / 100 = -40%.
+    assert checks["generation_shift"].tolist() == pytest.approx([0.0, -0.40])
+    assert checks["exempt"].tolist() == [False, True]
+    assert checks["reason"].tolist() == ["no other series shifted", ""]
+
+
+def test_in_episodes_with_hour() -> None:
+    hourly = pd.DataFrame(
+        {
+            "ba": "X",
+            "utc": [utc(t) for t in ("2016-01-02 11:00", "2016-01-02 12:00", "2016-01-03 12:00")],
+        }
+    )
+    episodes = pd.DataFrame(
+        {
+            "ba": ["X"],
+            "hour": pd.array([12], dtype="Int64"),
+            "start": [utc("2016-01-02")],
+            "end": [utc("2016-01-02")],
+        }
+    )
+    assert in_episodes(hourly, episodes).tolist() == [False, True, False]

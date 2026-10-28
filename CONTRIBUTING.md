@@ -38,4 +38,5 @@
   changes, the energy balance, the R5 exception rule) and `results/demand_truth.md`.
 - `src/grid_audit/data_quality.py`: applies the approved rules; writes `results/data_quality.md`
   and `data/balance_exemptions.csv` (tracked, generated: the R5 exemptions with their evidence).
+- `docs/step3_audit_plan.md`: the pre-registered plan for the audit (Step 3).
 - `tests/`: tests and saved sample files.
