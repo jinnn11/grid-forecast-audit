@@ -7,7 +7,6 @@ import pandas as pd
 
 from grid_audit.check import fmt, markdown_table
 
-VALUE_COLUMNS = ["demand", "forecast", "demand_adjusted"]
 FILE_PATTERN = re.compile(r"EIA930_BALANCE_(\d{4})_(Jan_Jun|Jul_Dec)\.csv")
 # A BA half-year is flagged when its median demand is outside these multiples of the previous one.
 LEVEL_SHIFT_LOW, LEVEL_SHIFT_HIGH = 2 / 3, 1.5
@@ -36,13 +35,13 @@ class Combined:
 def combine(frames: dict[str, pd.DataFrame]) -> Combined:
     """Stack per-file tables in the given order, tagging each row with its source file.
 
-    Identical BA/hour rows are dropped (the first is kept). BA/hour rows that disagree are
-    returned in `conflicts` rather than resolved.
+    BA/hour rows identical in every column are dropped (the first is kept). BA/hour rows that
+    disagree are returned in `conflicts` rather than resolved.
     """
     stacked = pd.concat(
         [frame.assign(source_file=name) for name, frame in frames.items()], ignore_index=True
     )
-    exact = stacked.duplicated(["ba", "utc", *VALUE_COLUMNS])
+    exact = stacked.drop(columns="source_file").duplicated()
     kept = stacked[~exact]
     clashing = kept.duplicated(["ba", "utc"], keep=False)
     hourly = kept[~clashing].sort_values(["ba", "utc"], ignore_index=True)
@@ -203,8 +202,8 @@ def render_schema_report(
         f"- Identical BA/hour rows in more than one file, dropped: {combined.exact_duplicates:,}",
         f"- BA/hour rows that disagree between files: {conflict_text}\n",
         "## Units\n",
-        "- The columns we use have the same names in every file that has them, so every file "
-        'states them in MW: "Demand (MW)", "Demand Forecast (MW)" and "Demand (MW) (Adjusted)".',
+        "- The columns we use have the same names in every file, so every file states them in "
+        "MW: " + ", ".join(f'"{c}"' for c in required if "(MW)" in c) + ".",
         f"- Magnitude check: BA half-years whose median positive demand is below "
         f"{LEVEL_SHIFT_LOW:.2f} or above {LEVEL_SHIFT_HIGH:.2f} times the BA's previous "
         f"half-year. A shift can mean a footprint change, a unit change or bad data; these are "

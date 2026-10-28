@@ -1,6 +1,6 @@
 # Proposed data-quality rules
 
-**Status: proposal. No rule has been applied.** `results/data_quality.md` is written only after the rules are approved.
+**Status: approved by the user on 2026-10-28 as proposed here (R1, R2 with N = 6, R3a, R3b).** This page is the record of the proposal. The truth series and two more rules (R4, R5) are proposed in `results/demand_truth.md`; `results/data_quality.md` is written once those are decided.
 
 - Data: 6,135,530 BA-hours from 72 BAs, 2015-07-01 05:00 to 2026-07-01 07:00 UTC.
 - Baseline: 5,136,224 hours (83.7%) have both demand and forecast. Rules remove hours from this baseline.
@@ -129,9 +129,9 @@ These events in `data/ba_events.csv` are recorded but trigger no rule.
 
 | Date | BA | Event | Basis | Evidence |
 | :-- | :-- | :-- | :-- | :-- |
-| 2015-12-18 | CHPD | demand_level_shift | data only | 14-day mean demand x0.65 on 2015-12-18 while the forecast moved x1.09; half-year median 415 MW (2015 H2) to 172 MW (2016 H1); year-on-year monthly median x0.37 from 2016-07 for 6 months. |
-| 2017-12-01 | SEC | demand_level_shift | data only | Demand level unstable 2017-12 to 2021-12: year-on-year monthly median outside 0.75-1.33 in 5 runs; 14-day mean steps x21.8 on 2019-07-30, x5.5 on 2020-01-18 and x0.43 on 2021-03-12 while the forecast moved x0.97-1.11. |
-| 2018-10-06 | TEPC | demand_level_shift | data only | 14-day mean demand x0.51 on 2018-10-06 while the forecast moved x1.00; year-on-year monthly median x0.57 from 2018-10 for 3 months (865 vs 1,514 MW). |
+| 2015-12-18 | CHPD | demand_level_shift | data only | Published forecast inconsistent with demand (about 2.4x; monthly medians 1.8-2.8x) from 2016-01 to 2021-06; from 2021-07 the forecast matches demand (about 0.98x). 14-day mean demand x0.65 on 2015-12-18 while the forecast moved x1.09; half-year median 415 MW (2015 H2) to 172 MW (2016 H1); year-on-year monthly median x0.37 from 2016-07 for 6 months. From 2015-12-18 to 2016-12-31 demand equals net generation minus interchange (under 0.1% of hours off by more than 10%), and EIA changed none of these hours (results/demand_truth.md). |
+| 2017-12-01 | SEC | demand_level_shift | data only | Demand level unstable 2017-12 to 2021-12: year-on-year monthly median outside 0.75-1.33 in 5 runs; 14-day mean steps x21.8 on 2019-07-30, x5.5 on 2020-01-18 and x0.43 on 2021-03-12 while the forecast moved x0.97-1.11. From 2017-12-01 to 2021-12-31, 58.7% of hours have demand more than 10% away from net generation minus interchange, and EIA changed 21.9% of them. SEC's net generation is itself impossible in 209 hours (over 1 million MW, up to 429,498,863 MW) (results/demand_truth.md). |
+| 2018-10-06 | TEPC | demand_level_shift | data only | Published forecast inconsistent with demand (monthly medians 1.2-2.2x) from 2018-10 to 2019-05; from 2019-06 it matches demand again (about 1.0x). 14-day mean demand x0.51 on 2018-10-06 while the forecast moved x1.00; year-on-year monthly median x0.57 from 2018-10 for 3 months (865 vs 1,514 MW). From 2018-10-06 to 2018-12-31 demand equals net generation minus interchange (no hour off by more than 10%), and EIA changed none of these hours (results/demand_truth.md). |
 | 2021-04-14 | PNM | subregion_change | EIA | No step in PNM demand near this date: the largest 14-day change within 20 days is x0.93 on 2021-03-28, with the forecast x0.91, consistent with weather. |
 
 ## Repeated forecasts (R2b, reported, not applied), N = 6

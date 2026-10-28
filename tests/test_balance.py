@@ -11,7 +11,16 @@ SAMPLE = Path(__file__).parent / "data" / "balance_sample.csv"
 
 def test_read_balance_sample() -> None:
     hourly = read_balance(SAMPLE)
-    assert list(hourly.columns) == ["ba", "utc", "demand", "forecast", "demand_adjusted"]
+    assert list(hourly.columns) == [
+        "ba",
+        "utc",
+        "demand",
+        "forecast",
+        "demand_imputed",
+        "demand_adjusted",
+        "net_generation",
+        "interchange",
+    ]
     # 26 BIG + 4 SMALL + 2 GEN + 3 NEG rows, sorted by BA then time.
     assert len(hourly) == 35
     assert list(hourly["ba"].drop_duplicates()) == ["BIG", "GEN", "NEG", "SMALL"]
@@ -30,8 +39,9 @@ def test_read_balance_sample() -> None:
 
     gen = hourly[hourly["ba"] == "GEN"]
     assert gen["demand"].isna().all() and gen["forecast"].isna().all()
-    # The sample has the adjusted column, but every value in it is blank.
-    assert hourly["demand_adjusted"].isna().all()
+    # The sample has the extra columns, but every value in them is blank.
+    extra = ["demand_imputed", "demand_adjusted", "net_generation", "interchange"]
+    assert hourly[extra].isna().all().all()
 
 
 def test_read_balance_adjusted_column() -> None:
@@ -44,6 +54,21 @@ def test_read_balance_adjusted_column() -> None:
     hourly = read_balance(io.StringIO(csv))
     assert hourly.loc[0, "demand_adjusted"] == 1234.0
     assert pd.isna(hourly.loc[1, "demand_adjusted"])
+
+
+def test_read_balance_imputed_generation_and_interchange() -> None:
+    csv = (
+        "Balancing Authority,UTC Time at End of Hour,Demand Forecast (MW),Demand (MW),"
+        "Net Generation (MW),Total Interchange (MW),Demand (MW) (Imputed)\n"
+        'X,01/01/2026 1:00:00 AM,5,,"1,200",-30,1230\n'
+        "X,01/01/2026 2:00:00 AM,5,5,8,3,\n"
+    )
+    hourly = read_balance(io.StringIO(csv))
+    assert pd.isna(hourly.loc[0, "demand"]) and hourly.loc[0, "demand_imputed"] == 1230.0
+    assert hourly.loc[0, "net_generation"] == 1200.0 and hourly.loc[0, "interchange"] == -30.0
+    assert hourly.loc[1, "net_generation"] == 8.0 and hourly.loc[1, "interchange"] == 3.0
+    assert pd.isna(hourly.loc[1, "demand_imputed"])
+    assert hourly["demand_adjusted"].isna().all()  # column absent from this file
 
 
 def test_read_balance_without_adjusted_column() -> None:

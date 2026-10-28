@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from grid_audit.balance import COLUMNS, read_balance
+from grid_audit.balance import COLUMNS, EXTRA_COLUMNS, read_balance
 from grid_audit.data_check import sha256
 from grid_audit.download import BASE_URL, RAW_DIR, balance_file_names
 from grid_audit.download_history import FIRST, LAST
@@ -35,7 +35,8 @@ def main() -> None:
     if absent:
         sys.exit(f"not downloaded yet: {', '.join(absent)}")
     files = [raw_file(p) for p in paths]
-    reference, required = files[-1], list(COLUMNS)
+    # The combined table stores every one of these, so each file must have them all.
+    reference, required = files[-1], [*COLUMNS, *EXTRA_COLUMNS]
     combined = None
     if all(c in f.header for f in files for c in required):
         combined = combine({p.name: read_balance(p) for p in paths})

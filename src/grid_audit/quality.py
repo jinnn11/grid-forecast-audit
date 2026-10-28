@@ -103,30 +103,29 @@ def largest_bas(hourly: pd.DataFrame, n: int = 10) -> list[str]:
     return list(hourly.groupby("ba")["demand"].mean().dropna().nlargest(n).index)
 
 
-def run_length_sensitivity(
+def drop_sensitivity(
     hourly: pd.DataFrame,
-    lengths: list[int],
+    candidates: dict[object, pd.Series],
     other_drops: pd.Series,
     top: list[str],
     keep_pct: float = 95.0,
 ) -> pd.DataFrame:
-    """For each run length N: hours R2 removes after `other_drops` (R1 and R3a), BAs losing more
-    than 1% of their hours with both values, and how many `top` BAs keep at least `keep_pct`
-    percent of (a) all their hours and (b) their hours with both values."""
+    """For each candidate version of a rule (column `key`): hours it removes after `other_drops`,
+    BAs losing more than 1% of their hours with both values, and how many `top` BAs keep at
+    least `keep_pct` percent of (a) all their hours and (b) their hours with both values."""
     ba = hourly["ba"]
     base = both_present(hourly)
     base_count = base.groupby(ba).sum()
     rows = []
-    for n in lengths:
-        r2 = repeats_in_runs(hourly, "demand", n)
-        removed = base & ~other_drops & r2
-        usable = base & ~other_drops & ~r2
+    for key, flags in candidates.items():
+        removed = base & ~other_drops & flags
+        usable = base & ~other_drops & ~flags
         lost_pct = 100 * removed.groupby(ba).sum() / base_count
         all_pct = 100 * usable.groupby(ba).mean()
         kept_pct = 100 * usable.groupby(ba).sum() / base_count
         rows.append(
             {
-                "n": n,
+                "key": key,
                 "removed": int(removed.sum()),
                 "bas_over_1pct": int((lost_pct > 1).sum()),
                 "top_all_hours": int((all_pct[top] >= keep_pct).sum()),
@@ -134,6 +133,20 @@ def run_length_sensitivity(
             }
         )
     return pd.DataFrame(rows)
+
+
+def run_length_sensitivity(
+    hourly: pd.DataFrame,
+    lengths: list[int],
+    other_drops: pd.Series,
+    top: list[str],
+    keep_pct: float = 95.0,
+) -> pd.DataFrame:
+    """drop_sensitivity for R2 at each run length N (column `n`), after `other_drops` (R1, R3a)."""
+    candidates: dict[object, pd.Series] = {n: repeats_in_runs(hourly, "demand", n) for n in lengths}
+    return drop_sensitivity(hourly, candidates, other_drops, top, keep_pct).rename(
+        columns={"key": "n"}
+    )
 
 
 def usable_share(hourly: pd.DataFrame, usable: pd.Series) -> pd.DataFrame:

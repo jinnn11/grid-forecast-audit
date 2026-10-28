@@ -101,8 +101,10 @@ def render_proposal(hourly: pd.DataFrame, events: pd.DataFrame, run_hours: int) 
     return "\n".join(
         [
             "# Proposed data-quality rules\n",
-            "**Status: proposal. No rule has been applied.** `results/data_quality.md` is written "
-            "only after the rules are approved.\n",
+            "**Status: approved by the user on 2026-10-28 as proposed here (R1, R2 with N = 6, "
+            "R3a, R3b).** This page is the record of the proposal. The truth series and two more "
+            "rules (R4, R5) are proposed in `results/demand_truth.md`; `results/data_quality.md` "
+            "is written once those are decided.\n",
             f"- Data: {fmt(len(hourly), 0)} BA-hours from {hourly['ba'].nunique()} BAs, {period}.",
             f"- Baseline: {fmt(base.sum(), 0)} hours ({fmt(100 * base.mean(), 1)}%) have both "
             "demand and forecast. Rules remove hours from this baseline.",

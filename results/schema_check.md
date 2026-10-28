@@ -33,7 +33,7 @@
 
 Reference header: `EIA930_BALANCE_2026_Jan_Jun.csv` (65 columns).
 
-All 22 files have the required columns ("Balancing Authority", "UTC Time at End of Hour", "Demand (MW)", "Demand Forecast (MW)").
+All 22 files have the required columns ("Balancing Authority", "UTC Time at End of Hour", "Demand (MW)", "Demand Forecast (MW)", "Demand (MW) (Imputed)", "Demand (MW) (Adjusted)", "Net Generation (MW)", "Total Interchange (MW)").
 
 ### 2015 H2 to 2018 H1 (19 columns)
 
@@ -84,7 +84,7 @@ All 22 files have the required columns ("Balancing Authority", "UTC Time at End 
 
 ## Units
 
-- The columns we use have the same names in every file that has them, so every file states them in MW: "Demand (MW)", "Demand Forecast (MW)" and "Demand (MW) (Adjusted)".
+- The columns we use have the same names in every file, so every file states them in MW: "Demand (MW)", "Demand Forecast (MW)", "Demand (MW) (Imputed)", "Demand (MW) (Adjusted)", "Net Generation (MW)", "Total Interchange (MW)".
 - Magnitude check: BA half-years whose median positive demand is below 0.67 or above 1.50 times the BA's previous half-year. A shift can mean a footprint change, a unit change or bad data; these are reported, not corrected. 6 flagged.
 
 | BA | Half-year | Previous median (MW) | Median (MW) | Ratio |

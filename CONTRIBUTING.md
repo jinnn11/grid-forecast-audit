@@ -34,4 +34,8 @@
   with basis "data only" are inferred from the data alone.
 - `src/grid_audit/quality.py` and `quality_rules.py`: data-quality rules and
   `results/quality_rules_proposal.md`.
+- `src/grid_audit/truth.py` and `truth_check.py`: checks on demand that avoid the forecast (EIA's
+  changes, the energy balance, the R5 exception rule) and `results/demand_truth.md`.
+- `src/grid_audit/data_quality.py`: applies the approved rules; writes `results/data_quality.md`
+  and `data/balance_exemptions.csv` (tracked, generated: the R5 exemptions with their evidence).
 - `tests/`: tests and saved sample files.
