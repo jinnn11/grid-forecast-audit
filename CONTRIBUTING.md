@@ -14,6 +14,11 @@
   in `results/schema_check.md`, which `python -m grid_audit.build_history` writes. The hash
   identifies the snapshot the results came from.
 - `data/raw/` and `data/processed/` are gitignored. Run one download at a time.
+- Operator data (approved 2026-10-28 for the Q5 check only: CAISO OASIS 2025 to Jan–Jun 2026,
+  SPP 2025) is cached under `data/raw/operators/`. SPP files keep their own names. OASIS names
+  its files by request time, so CAISO files are named by run, month and the UTC window
+  requested. `results/operator_files.csv` records each file's URL, size, download time and
+  SHA-256.
 
 ## Tests
 - Tests never touch the network. `tests/conftest.py` blocks sockets; use small saved files in
@@ -39,4 +44,9 @@
 - `src/grid_audit/data_quality.py`: applies the approved rules; writes `results/data_quality.md`
   and `data/balance_exemptions.csv` (tracked, generated: the R5 exemptions with their evidence).
 - `docs/step3_audit_plan.md`: the pre-registered plan for the audit (Step 3).
+- `src/grid_audit/calendar.py`, `metrics.py`, `stats.py` (pure) and `audit.py`, `figures.py`:
+  `uv run python -m grid_audit.audit` writes `results/audit.md` and `results/figures/`.
+  `data/weather_events.csv` (tracked) is the plan's event table with sources.
+- `src/grid_audit/operators.py` (pure), `download_operators.py` and `operator_check.py`: the
+  operators' own load and forecasts, and `results/operator_check.md`.
 - `tests/`: tests and saved sample files.

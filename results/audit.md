@@ -78,7 +78,8 @@ Per BA: yearly MAPE over its eligible years, for the 52 BAs with at least 8. Slo
 Across BAs: the 50-BA panel eligible in every year 2016–2025.
 
 - Median MAPE across the panel: slope 0.010 points per year, Mann–Kendall S = 9, p = 0.474 (no clear trend).
-- National figure on the panel: slope 0.061 points per year, S = 23, p = 0.049 (worse).
+- National figure on the panel: slope 0.061 points per year, S = 23, p = 0.049 (worse). The verdict sits close to the 0.05 bar; the Robustness section shows it for every variant.
+- Among the ten panel years (1: the highest error), 2024 ranks 3 and 2025 ranks 1 on the panel median, and 2024 ranks 5 and 2025 ranks 1 on the national figure.
 
 | Year | Panel median MAPE (%) | Panel national WAPE (%) |
 | :-- | --: | --: |
@@ -193,25 +194,27 @@ MAPE in the event window against the same BA's hours in the 14 days before and a
 | :-- | :-- | :-- | --: | --: | --: | --: | --: |
 | 1 | South Central US cold | 2018-01-16 to 01-18 | 3 of 4 | 2.70 | 2.84 | 1.21 | 2 |
 | 2 | Polar vortex | 2019-01-29 to 02-01 | 4 of 4 | 3.49 | 2.88 | 1.05 | 2 |
-| 3 | Winter Storm Uri | 2021-02-13 to 02-20 | 5 of 5 | 6.41 | 4.50 | 1.47 | 5 |
+| 3 | Winter Storm Uri† | 2021-02-13 to 02-20 | 5 of 5 | 6.41 | 4.50 | 1.47 | 5 |
 | 4 | California heat wave | 2020-08-13 to 08-16 | 5 of 5 | 3.43 | 3.79 | 0.76 | 2 |
 | 5 | Pacific Northwest heat dome | 2021-06-27 to 07-01 | 10 of 10 | 6.00 | 3.87 | 1.51 | 8 |
 | 6 | Western heat wave | 2022-09-05 to 09-07 | 5 of 5 | 4.02 | 3.88 | 1.53 | 4 |
 | 7 | Winter Storm Elliott | 2022-12-21 to 12-26 | 14 of 14 | 4.34 | 3.21 | 1.35 | 13 |
 | 8 | Texas heat | 2023-09-05 to 09-07 | 1 of 1 | 1.93 | 2.20 | 0.88 | 0 |
 | 9 | Winter Storms Gerri and Heather | 2024-01-10 to 01-17 | 9 of 9 | 3.27 | 2.82 | 1.15 | 7 |
-| 10 | Hurricane Harvey | 2017-08-24 to 08-28 | 2 of 2 | 2.95 | 2.33 | 1.33 | 1 |
-| 11 | Hurricane Irma | 2017-09-09 to 09-13 | 10 of 10 | 29.72 | 6.54 | 4.62 | 9 |
-| 12 | Hurricane Michael | 2018-10-09 to 10-13 | 4 of 4 | 59.28 | 12.71 | 1.51 | 3 |
-| 13 | Hurricane Laura | 2020-08-26 to 08-30 | 1 of 1 | 4.60 | 2.94 | 1.57 | 1 |
-| 14 | Hurricane Zeta | 2020-10-27 to 10-31 | 2 of 2 | 2.89 | 2.93 | 1.00 | 1 |
-| 15 | Hurricane Ida | 2021-08-28 to 09-01 | 1 of 1 | 5.77 | 2.62 | 2.20 | 1 |
-| 16 | Hurricane Ian | 2022-09-27 to 10-01 | 7 of 7 | 11.97 | 5.27 | 1.65 | 5 |
-| 17 | Hurricane Idalia | 2023-08-29 to 09-02 | 6 of 6 | 7.52 | 7.17 | 0.90 | 2 |
-| 18 | Hurricane Helene | 2024-09-25 to 09-29 | 12 of 12 | 8.75 | 4.47 | 1.59 | 7 |
-| 19 | Hurricane Milton | 2024-10-08 to 10-12 | 8 of 8 | 8.00 | 6.94 | 1.16 | 4 |
+| 10 | Hurricane Harvey† | 2017-08-24 to 08-28 | 2 of 2 | 2.95 | 2.33 | 1.33 | 1 |
+| 11 | Hurricane Irma† | 2017-09-09 to 09-13 | 10 of 10 | 29.72 | 6.54 | 4.62 | 9 |
+| 12 | Hurricane Michael† | 2018-10-09 to 10-13 | 4 of 4 | 59.28 | 12.71 | 1.51 | 3 |
+| 13 | Hurricane Laura† | 2020-08-26 to 08-30 | 1 of 1 | 4.60 | 2.94 | 1.57 | 1 |
+| 14 | Hurricane Zeta† | 2020-10-27 to 10-31 | 2 of 2 | 2.89 | 2.93 | 1.00 | 1 |
+| 15 | Hurricane Ida† | 2021-08-28 to 09-01 | 1 of 1 | 5.77 | 2.62 | 2.20 | 1 |
+| 16 | Hurricane Ian† | 2022-09-27 to 10-01 | 7 of 7 | 11.97 | 5.27 | 1.65 | 5 |
+| 17 | Hurricane Idalia† | 2023-08-29 to 09-02 | 6 of 6 | 7.52 | 7.17 | 0.90 | 2 |
+| 18 | Hurricane Helene† | 2024-09-25 to 09-29 | 12 of 12 | 8.75 | 4.47 | 1.59 | 7 |
+| 19 | Hurricane Milton† | 2024-10-08 to 10-12 | 8 of 8 | 8.00 | 6.94 | 1.16 | 4 |
 
-Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast):
+† **Winter Storm Uri and the hurricanes: these "errors" mostly measure electricity that could not be delivered, not forecasting skill.** Outages and load shedding cut actual demand in these windows, so reported demand fell below what customers would have used, while the forecast still assumed they would be served. Their high ratios and positive window bias (for example ERCO during Uri) should not be read as forecast failures.
+
+Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast; † as above):
 
 | # | BA | Window hours | Window MAPE (%) | Window bias (%) | Baseline hours | Baseline MAPE (%) | Baseline bias (%) | Ratio |
 | :-- | :-- | --: | --: | --: | --: | --: | --: | --: |
@@ -223,11 +226,11 @@ Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast):
 | 2 | **PJM** | 94 | 3.52 | -0.05 | 572 | 2.87 | -1.22 | 1.23 |
 | 2 | **SWPP** | 96 | 2.27 | 0.27 | 672 | 2.53 | 0.70 | 0.90 |
 | 2 | AECI | 96 | 4.02 | 2.53 | 672 | 5.24 | -1.98 | 0.77 |
-| 3 | **ERCO** | 192 | 22.10 | 19.75 | 672 | 4.76 | 0.53 | 4.65 |
-| 3 | **SWPP** | 192 | 6.41 | 5.74 | 663 | 4.36 | 2.50 | 1.47 |
-| 3 | **MISO** | 192 | 4.52 | 1.85 | 672 | 2.11 | 1.20 | 2.14 |
-| 3 | AECI | 192 | 5.98 | 1.67 | 672 | 4.50 | -0.66 | 1.33 |
-| 3 | SPA | 192 | 12.47 | 5.02 | 672 | 12.03 | 6.27 | 1.04 |
+| 3† | **ERCO** | 192 | 22.10 | 19.75 | 672 | 4.76 | 0.53 | 4.65 |
+| 3† | **SWPP** | 192 | 6.41 | 5.74 | 663 | 4.36 | 2.50 | 1.47 |
+| 3† | **MISO** | 192 | 4.52 | 1.85 | 672 | 2.11 | 1.20 | 2.14 |
+| 3† | AECI | 192 | 5.98 | 1.67 | 672 | 4.50 | -0.66 | 1.33 |
+| 3† | SPA | 192 | 12.47 | 5.02 | 672 | 12.03 | 6.27 | 1.04 |
 | 4 | **CISO** | 44 | 1.73 | 0.10 | 396 | 3.20 | 1.90 | 0.54 |
 | 4 | BANC | 92 | 4.51 | -3.38 | 623 | 3.59 | 1.00 | 1.26 |
 | 4 | LDWP | 96 | 10.58 | -7.81 | 672 | 8.43 | -0.43 | 1.26 |
@@ -272,59 +275,59 @@ Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast):
 | 9 | BPAT | 192 | 3.50 | 0.96 | 624 | 1.92 | -0.49 | 1.82 |
 | 9 | PGE | 192 | 1.65 | -0.68 | 624 | 1.15 | -0.20 | 1.43 |
 | 9 | PACW | 192 | 3.10 | 0.02 | 624 | 4.04 | 3.08 | 0.77 |
-| 10 | **ERCO** | 120 | 4.33 | 3.81 | 648 | 2.11 | 0.76 | 2.05 |
-| 10 | **MISO** | 120 | 1.57 | 1.53 | 648 | 2.55 | 2.43 | 0.62 |
-| 11 | **FPL** | 119 | 39.15 | 16.41 | 648 | 6.25 | -5.29 | 6.27 |
-| 11 | FPC | 120 | 28.86 | -11.83 | 648 | 22.19 | -22.41 | 1.30 |
-| 11 | TEC | 120 | 19.64 | 6.92 | 648 | 5.07 | 2.10 | 3.87 |
-| 11 | JEA | 118 | 52.52 | 30.16 | 624 | 8.73 | 1.87 | 6.02 |
-| 11 | FMPP | 120 | 30.59 | 19.08 | 647 | 5.70 | 1.81 | 5.37 |
-| 11 | TAL | 120 | 16.49 | -1.16 | 648 | 4.89 | -4.12 | 3.37 |
-| 11 | GVL | 120 | 24.93 | 12.52 | 648 | 6.84 | -4.48 | 3.64 |
-| 11 | SEC | 74 | 403.20 | 58.30 | 621 | 38.13 | 17.38 | 10.57 |
-| 11 | HST | 111 | 223.93 | 11.32 | 648 | 7.24 | 0.37 | 30.92 |
-| 11 | **SOCO** | 96 | 4.32 | -3.00 | 648 | 4.82 | -4.06 | 0.90 |
-| 12 | **SOCO** | 26 | 6.53 | -5.12 | 276 | 4.13 | -3.82 | 1.58 |
-| 12 | TAL | 119 | 100.32 | 48.53 | 672 | 4.88 | -4.62 | 20.54 |
-| 12 | AEC | 120 | 135.93 | 132.94 | 623 | 94.74 | 95.11 | 1.43 |
-| 12 | FPC | 120 | 18.24 | -18.57 | 672 | 20.54 | -20.85 | 0.89 |
-| 13 | **MISO** | 120 | 4.60 | 4.84 | 648 | 2.94 | 2.61 | 1.57 |
-| 14 | **MISO** | 120 | 2.22 | 1.68 | 672 | 2.14 | 2.00 | 1.04 |
-| 14 | **SOCO** | 120 | 3.56 | 0.77 | 673 | 3.72 | -3.08 | 0.96 |
-| 15 | **MISO** | 120 | 5.77 | 5.75 | 647 | 2.62 | 2.47 | 2.20 |
-| 16 | **FPL** | 120 | 3.99 | 2.20 | 672 | 2.85 | -1.14 | 1.40 |
-| 16 | TEC | 120 | 34.65 | 19.23 | 672 | 4.95 | 1.54 | 7.00 |
-| 16 | FPC | 120 | 16.46 | -12.54 | 672 | 22.46 | -22.74 | 0.73 |
-| 16 | FMPP | 120 | 10.52 | 1.20 | 672 | 5.27 | 2.49 | 2.00 |
-| 16 | SEC | 120 | 11.97 | -2.24 | 671 | 36.53 | -8.16 | 0.33 |
-| 16 | JEA | 120 | 14.38 | 12.74 | 672 | 4.15 | 2.56 | 3.47 |
-| 16 | GVL | 120 | 10.02 | 1.30 | 672 | 6.09 | -4.07 | 1.65 |
-| 17 | FPC | 120 | 19.90 | -20.29 | 648 | 21.93 | -22.11 | 0.91 |
-| 17 | TAL | 120 | 6.24 | 3.18 | 648 | 4.11 | -2.90 | 1.52 |
-| 17 | SEC | 120 | 8.24 | -7.09 | 646 | 9.23 | -8.84 | 0.89 |
-| 17 | GVL | 120 | 8.62 | -7.14 | 648 | 10.57 | -9.59 | 0.82 |
-| 17 | JEA | 120 | 6.80 | 5.57 | 648 | 5.10 | 4.19 | 1.33 |
-| 17 | **SOCO** | 120 | 1.79 | -1.53 | 648 | 2.20 | -1.73 | 0.81 |
-| 18 | FPC | 120 | 20.32 | -20.53 | 552 | 23.45 | -23.63 | 0.87 |
-| 18 | TAL | 120 | 8.59 | 3.82 | 672 | 3.76 | -2.80 | 2.28 |
-| 18 | TEC | 120 | 7.86 | 4.68 | 552 | 4.59 | 1.61 | 1.71 |
-| 18 | SEC | 119 | 9.53 | -5.16 | 551 | 9.99 | -9.11 | 0.95 |
-| 18 | GVL | 120 | 14.07 | -3.64 | 552 | 9.49 | -6.48 | 1.48 |
-| 18 | JEA | 120 | 8.02 | 7.27 | 552 | 4.71 | 2.92 | 1.70 |
-| 18 | **SOCO** | 120 | 1.88 | -1.75 | 672 | 2.42 | -1.90 | 0.78 |
-| 18 | DUK | 120 | 14.07 | 10.64 | 672 | 2.78 | -0.21 | 5.06 |
-| 18 | CPLE | 120 | 2.77 | -1.01 | 672 | 3.06 | 0.57 | 0.91 |
-| 18 | CPLW | 120 | 245.15 | 71.53 | 672 | 8.38 | 2.16 | 29.27 |
-| 18 | SC | 120 | 8.91 | 8.56 | 672 | 4.15 | 3.50 | 2.15 |
-| 18 | SCEG | 120 | 3.14 | -0.16 | 672 | 4.35 | -3.63 | 0.72 |
-| 19 | FPC | 120 | 21.81 | -13.34 | 552 | 23.59 | -23.70 | 0.92 |
-| 19 | TEC | 120 | 55.75 | 33.59 | 552 | 7.37 | -3.12 | 7.56 |
-| 19 | **FPL** | 120 | 4.28 | 2.46 | 672 | 3.09 | 0.01 | 1.39 |
-| 19 | FMPP | 120 | 3.35 | -1.66 | 672 | 4.25 | 0.64 | 0.79 |
-| 19 | SEC | 115 | 8.12 | -6.05 | 551 | 9.65 | -9.31 | 0.84 |
-| 19 | JEA | 120 | 7.24 | 5.46 | 552 | 3.87 | 2.17 | 1.87 |
-| 19 | GVL | 120 | 7.88 | -7.61 | 552 | 8.42 | -8.35 | 0.94 |
-| 19 | HST | 120 | 9.10 | 1.70 | 672 | 6.51 | 2.82 | 1.40 |
+| 10† | **ERCO** | 120 | 4.33 | 3.81 | 648 | 2.11 | 0.76 | 2.05 |
+| 10† | **MISO** | 120 | 1.57 | 1.53 | 648 | 2.55 | 2.43 | 0.62 |
+| 11† | **FPL** | 119 | 39.15 | 16.41 | 648 | 6.25 | -5.29 | 6.27 |
+| 11† | FPC | 120 | 28.86 | -11.83 | 648 | 22.19 | -22.41 | 1.30 |
+| 11† | TEC | 120 | 19.64 | 6.92 | 648 | 5.07 | 2.10 | 3.87 |
+| 11† | JEA | 118 | 52.52 | 30.16 | 624 | 8.73 | 1.87 | 6.02 |
+| 11† | FMPP | 120 | 30.59 | 19.08 | 647 | 5.70 | 1.81 | 5.37 |
+| 11† | TAL | 120 | 16.49 | -1.16 | 648 | 4.89 | -4.12 | 3.37 |
+| 11† | GVL | 120 | 24.93 | 12.52 | 648 | 6.84 | -4.48 | 3.64 |
+| 11† | SEC | 74 | 403.20 | 58.30 | 621 | 38.13 | 17.38 | 10.57 |
+| 11† | HST | 111 | 223.93 | 11.32 | 648 | 7.24 | 0.37 | 30.92 |
+| 11† | **SOCO** | 96 | 4.32 | -3.00 | 648 | 4.82 | -4.06 | 0.90 |
+| 12† | **SOCO** | 26 | 6.53 | -5.12 | 276 | 4.13 | -3.82 | 1.58 |
+| 12† | TAL | 119 | 100.32 | 48.53 | 672 | 4.88 | -4.62 | 20.54 |
+| 12† | AEC | 120 | 135.93 | 132.94 | 623 | 94.74 | 95.11 | 1.43 |
+| 12† | FPC | 120 | 18.24 | -18.57 | 672 | 20.54 | -20.85 | 0.89 |
+| 13† | **MISO** | 120 | 4.60 | 4.84 | 648 | 2.94 | 2.61 | 1.57 |
+| 14† | **MISO** | 120 | 2.22 | 1.68 | 672 | 2.14 | 2.00 | 1.04 |
+| 14† | **SOCO** | 120 | 3.56 | 0.77 | 673 | 3.72 | -3.08 | 0.96 |
+| 15† | **MISO** | 120 | 5.77 | 5.75 | 647 | 2.62 | 2.47 | 2.20 |
+| 16† | **FPL** | 120 | 3.99 | 2.20 | 672 | 2.85 | -1.14 | 1.40 |
+| 16† | TEC | 120 | 34.65 | 19.23 | 672 | 4.95 | 1.54 | 7.00 |
+| 16† | FPC | 120 | 16.46 | -12.54 | 672 | 22.46 | -22.74 | 0.73 |
+| 16† | FMPP | 120 | 10.52 | 1.20 | 672 | 5.27 | 2.49 | 2.00 |
+| 16† | SEC | 120 | 11.97 | -2.24 | 671 | 36.53 | -8.16 | 0.33 |
+| 16† | JEA | 120 | 14.38 | 12.74 | 672 | 4.15 | 2.56 | 3.47 |
+| 16† | GVL | 120 | 10.02 | 1.30 | 672 | 6.09 | -4.07 | 1.65 |
+| 17† | FPC | 120 | 19.90 | -20.29 | 648 | 21.93 | -22.11 | 0.91 |
+| 17† | TAL | 120 | 6.24 | 3.18 | 648 | 4.11 | -2.90 | 1.52 |
+| 17† | SEC | 120 | 8.24 | -7.09 | 646 | 9.23 | -8.84 | 0.89 |
+| 17† | GVL | 120 | 8.62 | -7.14 | 648 | 10.57 | -9.59 | 0.82 |
+| 17† | JEA | 120 | 6.80 | 5.57 | 648 | 5.10 | 4.19 | 1.33 |
+| 17† | **SOCO** | 120 | 1.79 | -1.53 | 648 | 2.20 | -1.73 | 0.81 |
+| 18† | FPC | 120 | 20.32 | -20.53 | 552 | 23.45 | -23.63 | 0.87 |
+| 18† | TAL | 120 | 8.59 | 3.82 | 672 | 3.76 | -2.80 | 2.28 |
+| 18† | TEC | 120 | 7.86 | 4.68 | 552 | 4.59 | 1.61 | 1.71 |
+| 18† | SEC | 119 | 9.53 | -5.16 | 551 | 9.99 | -9.11 | 0.95 |
+| 18† | GVL | 120 | 14.07 | -3.64 | 552 | 9.49 | -6.48 | 1.48 |
+| 18† | JEA | 120 | 8.02 | 7.27 | 552 | 4.71 | 2.92 | 1.70 |
+| 18† | **SOCO** | 120 | 1.88 | -1.75 | 672 | 2.42 | -1.90 | 0.78 |
+| 18† | DUK | 120 | 14.07 | 10.64 | 672 | 2.78 | -0.21 | 5.06 |
+| 18† | CPLE | 120 | 2.77 | -1.01 | 672 | 3.06 | 0.57 | 0.91 |
+| 18† | CPLW | 120 | 245.15 | 71.53 | 672 | 8.38 | 2.16 | 29.27 |
+| 18† | SC | 120 | 8.91 | 8.56 | 672 | 4.15 | 3.50 | 2.15 |
+| 18† | SCEG | 120 | 3.14 | -0.16 | 672 | 4.35 | -3.63 | 0.72 |
+| 19† | FPC | 120 | 21.81 | -13.34 | 552 | 23.59 | -23.70 | 0.92 |
+| 19† | TEC | 120 | 55.75 | 33.59 | 552 | 7.37 | -3.12 | 7.56 |
+| 19† | **FPL** | 120 | 4.28 | 2.46 | 672 | 3.09 | 0.01 | 1.39 |
+| 19† | FMPP | 120 | 3.35 | -1.66 | 672 | 4.25 | 0.64 | 0.79 |
+| 19† | SEC | 115 | 8.12 | -6.05 | 551 | 9.65 | -9.31 | 0.84 |
+| 19† | JEA | 120 | 7.24 | 5.46 | 552 | 3.87 | 2.17 | 1.87 |
+| 19† | GVL | 120 | 7.88 | -7.61 | 552 | 8.42 | -8.35 | 0.94 |
+| 19† | HST | 120 | 9.10 | 1.70 | 672 | 6.51 | 2.82 | 1.40 |
 
 ### Extreme-demand days (second check, demand only)
 
@@ -428,29 +431,31 @@ Step 1 of the plan's checks. Repeated forecast: share of the BA-year's usable ho
 | FPL 2017 | -0.08 | 0.0 | 7.08 / 8.70 / 6.24 / 6.58 / 8.48 | none | 7 (0.1%) | 0 | none | Jan, Feb, Mar, Jun, Jul, Nov, Dec | 13 of 24: 1-5, 17-24 |
 | SWPP 2025 | -0.79 | 0.0 | 8.69 / 8.14 / 7.76 / 8.13 / 9.00 | none | 63 (0.7%) | 0 | none | May, Jun, Jul, Aug, Sep, Oct, Nov, Dec | 24 of 24: 1-24 |
 
-Step 2 of the plan (comparing a few weeks against the operator's own published load and day-ahead forecast) needs downloads from outside EIA and has not been done; we ask before downloading anything.
+Step 2 of the plan, the comparison with the operator's own published load and day-ahead forecast, was approved by the user on 2026-10-28 for CAISO (2025 and Jan–Jun 2026) and SPP (2025): `results/operator_check.md`. FPL has no public hourly forecast archive that we know of.
 
 ## Robustness
 
-Each variant re-runs the whole audit with one change. Eligibility, the panel and the Q4 BAs are recomputed for each variant (counts in the second table).
+Each variant re-runs the whole audit with one change. Eligibility, the panel and the Q4 BAs are recomputed for each variant (counts in the second table). The national panel trend is the Theil–Sen slope and two-sided Mann–Kendall test of the panel's yearly Σ|e| / Σ demand; its "worse" verdict in the main run rests on p = 0.049, so it is shown for every variant.
 
-| Variant | Change from the main run | Median 2025 MAPE (%) | National 2025 WAPE (%) | Panel-median slope 2016–2025 (pp/yr) | BAs worse / better (Q2) | Spearman ρ (Q4) | BAs losing to naive in 2025 (Q5) |
-| :-- | :-- | --: | --: | --: | --: | --: | --: |
-| Main | — | 4.16 | 4.24 | 0.010 | 11 / 10 | -0.004 | 19 |
-| EIA adjusted demand | Adjusted demand is the truth; all rules re-applied to it, except R4 | 4.16 | 4.23 | 0.020 | 10 / 9 | 0.011 | 19 |
-| Without R5 | No energy-balance rule | 4.16 | 4.24 | -0.008 | 11 / 10 | -0.070 | 19 |
-| R2 with N = 3 | Repeated-demand runs of 3 hours or more dropped | 4.16 | 4.24 | 0.010 | 11 / 9 | 0.005 | 19 |
-| R2 with N = 12 | Only runs of 12 hours or more dropped | 4.16 | 4.24 | 0.010 | 11 / 10 | -0.004 | 19 |
-| Repeated forecasts dropped | R2b (forecast runs of 6 hours or more) applied | 4.16 | 4.23 | 0.010 | 11 / 10 | 0.027 | 19 |
+| Variant | Change from the main run | Median 2025 MAPE (%) | National 2025 WAPE (%) | Panel-median slope 2016–2025 (pp/yr) | National panel slope 2016–2025 (pp/yr) | National panel trend p (verdict) | BAs worse / better (Q2) | Spearman ρ (Q4) | BAs losing to naive in 2025 (Q5) |
+| :-- | :-- | --: | --: | --: | --: | --: | --: | --: | --: |
+| Main | — | 4.16 | 4.24 | 0.010 | 0.061 | 0.049 (worse) | 11 / 10 | -0.004 | 19 |
+| EIA adjusted demand | Adjusted demand is the truth; all rules re-applied to it, except R4 | 4.16 | 4.23 | 0.020 | 0.062 | 0.074 (no clear trend) | 10 / 9 | 0.011 | 19 |
+| Without R5 | No energy-balance rule | 4.16 | 4.24 | -0.008 | 0.052 | 0.107 (no clear trend) | 11 / 10 | -0.070 | 19 |
+| R2 with N = 3 | Repeated-demand runs of 3 hours or more dropped | 4.16 | 4.24 | 0.010 | 0.061 | 0.049 (worse) | 11 / 9 | 0.005 | 19 |
+| R2 with N = 12 | Only runs of 12 hours or more dropped | 4.16 | 4.24 | 0.010 | 0.061 | 0.049 (worse) | 11 / 10 | -0.004 | 19 |
+| Repeated forecasts dropped | R2b (forecast runs of 6 hours or more) applied | 4.16 | 4.23 | 0.010 | 0.061 | 0.074 (no clear trend) | 11 / 10 | 0.027 | 19 |
 
-| Variant | Eligible BAs 2025 | Panel BAs | BAs tested for trend | Q4 BAs | Scored hours 2016–2025 |
-| :-- | --: | --: | --: | --: | --: |
-| Main | 53 | 50 | 52 | 49 | 4,582,331 |
-| EIA adjusted demand | 53 | 50 | 52 | 49 | 4,599,581 |
-| Without R5 | 53 | 51 | 53 | 50 | 4,658,548 |
-| R2 with N = 3 | 53 | 50 | 52 | 49 | 4,574,117 |
-| R2 with N = 12 | 53 | 50 | 52 | 49 | 4,582,454 |
-| Repeated forecasts dropped | 53 | 50 | 52 | 49 | 4,574,441 |
+Ranks: where 2024 / 2025 fall among the ten panel years, 1 being the highest error.
+
+| Variant | Eligible BAs 2025 | Panel BAs | BAs tested for trend | Q4 BAs | Scored hours 2016–2025 | Rank of 2024 / 2025, panel median | Rank of 2024 / 2025, national |
+| :-- | --: | --: | --: | --: | --: | --: | --: |
+| Main | 53 | 50 | 52 | 49 | 4,582,331 | 3 / 1 | 5 / 1 |
+| EIA adjusted demand | 53 | 50 | 52 | 49 | 4,599,581 | 3 / 1 | 5 / 1 |
+| Without R5 | 53 | 51 | 53 | 50 | 4,658,548 | 4 / 1 | 5 / 1 |
+| R2 with N = 3 | 53 | 50 | 52 | 49 | 4,574,117 | 3 / 1 | 5 / 1 |
+| R2 with N = 12 | 53 | 50 | 52 | 49 | 4,582,454 | 3 / 1 | 5 / 1 |
+| Repeated forecasts dropped | 53 | 50 | 52 | 49 | 4,574,441 | 3 / 1 | 5 / 1 |
 
 ## Notes
 

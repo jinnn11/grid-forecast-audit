@@ -5,6 +5,7 @@ from grid_audit.audit import (
     Run,
     audit_run,
     ba_trends,
+    cut_demand,
     demand_growth,
     event_effects,
     extreme_day_effects,
@@ -17,6 +18,7 @@ from grid_audit.audit import (
     panel_bas,
     usable_after,
     variant_rules,
+    year_ranks,
 )
 from grid_audit.calendar import holiday_days, local_hours
 from grid_audit.data_quality import Applied
@@ -268,3 +270,22 @@ def test_loss_checks_finds_an_hour_offset() -> None:
     assert mape[24] == pytest.approx(mape[0]) and mape[-24] == pytest.approx(mape[0])
     assert checks["best_shift"] == 1
     assert checks["r5_hours"] == 0 and checks["events"] == "none"
+
+
+def test_year_ranks() -> None:
+    # Errors 2016-2025: 3.0 except 2018 = 4.0, 2024 = 3.5 and 2025 = 5.0. Highest first: 2025
+    # (1), 2018 (2), 2024 (3).
+    values = pd.Series(3.0, index=range(2016, 2026))
+    values[2018], values[2024], values[2025] = 4.0, 3.5, 5.0
+    assert year_ranks(values) == {2024: 3, 2025: 1}
+    # A tie shares the better rank: 2024 equal to 2018 -> both 2.
+    values[2024] = 4.0
+    assert year_ranks(values) == {2024: 2, 2025: 1}
+
+
+def test_cut_demand() -> None:
+    # Uri and the hurricanes (criterion (c)); not Elliott or the heat waves.
+    assert cut_demand(pd.Series({"event": "Winter Storm Uri", "criterion": "(a), (b)"}))
+    assert cut_demand(pd.Series({"event": "Hurricane Ida", "criterion": "(c)"}))
+    elliott = {"event": "Winter Storm Elliott", "criterion": "(a), (b) TVA and Duke load shed"}
+    assert not cut_demand(pd.Series(elliott))

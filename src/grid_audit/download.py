@@ -1,6 +1,8 @@
-"""Cached downloads of EIA-930 files: each file is fetched at most once."""
+"""Cached downloads (EIA-930 files, and the operator files the user approved on 2026-10-28):
+each file is fetched at most once."""
 
 import shutil
+import subprocess
 import urllib.request
 from pathlib import Path
 
@@ -34,5 +36,27 @@ def fetch(name: str, raw_dir: Path = RAW_DIR, base_url: str = BASE_URL) -> Path:
     request = urllib.request.Request(base_url + name, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=120) as response, partial.open("wb") as out:
         shutil.copyfileobj(response, out)
+    partial.replace(path)
+    return path
+
+
+def fetch_url(url: str, path: Path) -> Path:
+    """Return `path`, downloading `url` to it with curl only if it is not cached yet.
+
+    curl checks certificates against the system's trust store. Python's bundled certificate
+    file lacks some current roots (CAISO OASIS chains to Sectigo's 2021 root R46), and
+    certificate checks stay on.
+    """
+    if path.exists():
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".part")
+    command = ["curl", "--silent", "--show-error", "--fail", "--max-time", "120"]
+    command += ["--user-agent", USER_AGENT, "--output", str(partial), url]
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError:
+        partial.unlink(missing_ok=True)
+        raise
     partial.replace(path)
     return path

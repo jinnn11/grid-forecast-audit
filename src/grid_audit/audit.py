@@ -49,7 +49,9 @@ Q4_LEFT_OUT = ("WACM", "SPA")  # footprint changes in 2022 and 2023
 # Published forecast inconsistent with demand (user, 2026-10-28): first and last month, ratio.
 MARKED = {"CHPD": ("2016-01", "2021-06", "about 2.4x"), "TEPC": ("2018-10", "2019-05", "1.2-2.2x")}
 MARK = "‡"
+OUTAGE_MARK = "†"  # outages and load shedding cut actual demand during the event
 FORECAST_SHIFTS = (-24, -1, 1, 24)  # hours, for the Q5 checks
+RANKED_YEARS = (2024, 2025)  # where they rank among the panel years (user, 2026-10-28)
 VARIANTS = {
     "Main": "—",
     "EIA adjusted demand": "Adjusted demand is the truth; all rules re-applied to it, except R4",
@@ -207,6 +209,12 @@ def demand_growth(yearly: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def year_ranks(values: pd.Series) -> dict[int, int]:
+    """Rank of each of RANKED_YEARS among the years of `values` (1: the highest error)."""
+    ranks = values.rank(ascending=False, method="min")
+    return {year: int(ranks[year]) for year in RANKED_YEARS}
+
+
 def robustness_row(run: Run) -> dict[str, object]:
     yearly = run.yearly
     final = yearly.xs(YEAR, level="year")
@@ -214,10 +222,16 @@ def robustness_row(run: Run) -> dict[str, object]:
     by_year = panel_years(yearly, panel)
     verdicts = ba_trends(yearly)["verdict"].value_counts()
     points = demand_growth(yearly)
+    national = trend(by_year.index, by_year["national"])
     return {
         "median": final["mape"].median(),
         "national": pooled_wape(final),
         "slope": theil_sen_slope(by_year.index, by_year["median_mape"]),
+        "national_slope": national.slope,
+        "national_p": national.p,
+        "national_verdict": national.verdict,
+        "median_ranks": year_ranks(by_year["median_mape"]),
+        "national_ranks": year_ranks(by_year["national"]),
         "worse": int(verdicts.get("worse", 0)),
         "better": int(verdicts.get("better", 0)),
         "rho": spearman(points["x"], points["y"]),
@@ -237,6 +251,12 @@ def season_hour(hours: pd.DataFrame) -> pd.DataFrame:
     """Median across BAs of each BA's MAPE per season (rows) and local hour ending (columns)."""
     mape = metrics(hours, ["season", "hour_ending", "ba"])["mape"]
     return mape.groupby(level=["season", "hour_ending"], observed=True).median().unstack()
+
+
+def cut_demand(event: pd.Series) -> bool:
+    """Events where outages and load shedding cut actual demand (user, 2026-10-28): Winter
+    Storm Uri and the hurricanes (criterion (c))."""
+    return event["criterion"] == "(c)" or event["event"] == "Winter Storm Uri"
 
 
 def event_days(weather: pd.DataFrame) -> pd.DataFrame:
@@ -512,6 +532,10 @@ def q2_section(r: Results) -> list[str]:
         [str(y), fmt(v.median_mape, 2), fmt(v.national, 2)] for y, v in by_year.iterrows()
     ]
     pt, nt = r.panel_trend, r.national_trend
+    rank_text, national_rank_text = (
+        " and ".join(f"{year} ranks {rank}" for year, rank in year_ranks(by_year[column]).items())
+        for column in ("median_mape", "national")
+    )
     return [
         "## Q2. Is accuracy getting worse?\n",
         f"Per BA: yearly MAPE over its eligible years, for the {tested} BAs with at least "
@@ -524,7 +548,10 @@ def q2_section(r: Results) -> list[str]:
         f"- Median MAPE across the panel: slope {fmt(pt.slope, 3)} points per year, "
         f"Mann–Kendall S = {pt.s}, p = {pt.p:.3f} ({pt.verdict}).",
         f"- National figure on the panel: slope {fmt(nt.slope, 3)} points per year, S = {nt.s}, "
-        f"p = {nt.p:.3f} ({nt.verdict}).\n",
+        f"p = {nt.p:.3f} ({nt.verdict}). The verdict sits close to the {ALPHA} bar; the "
+        "Robustness section shows it for every variant.",
+        f"- Among the ten panel years (1: the highest error), {rank_text} on the panel median, "
+        f"and {national_rank_text} on the national figure.\n",
         markdown_table(["Year", "Panel median MAPE (%)", "Panel national WAPE (%)"], panel_rows)
         + "\n",
         "Figure 2: `results/figures/q2_mape_by_year.png`.\n",
@@ -576,7 +603,7 @@ def q3_section(r: Results) -> list[str]:
         event_rows.append(
             [
                 str(event_id),
-                e.event,
+                e.event + (OUTAGE_MARK if cut_demand(e) else ""),
                 f"{e.first_day:%Y-%m-%d} to {e.last_day:%m-%d}",
                 f"{len(scored)} of {len(part)}",
                 fmt(scored["window_mape"].median(), 2),
@@ -587,7 +614,7 @@ def q3_section(r: Results) -> list[str]:
         )
     detail_rows = [
         [
-            str(d.id),
+            str(d.id) + (OUTAGE_MARK if cut_demand(weather.loc[d.id]) else ""),
             ba_label(d.ba, r.top, d.marked),
             fmt(d.window_hours, 0),
             fmt(d.window_mape, 2),
@@ -660,7 +687,14 @@ def q3_section(r: Results) -> list[str]:
             left_columns=3,
         )
         + "\n",
-        "Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast):\n",
+        f'{OUTAGE_MARK} **Winter Storm Uri and the hurricanes: these "errors" mostly measure '
+        "electricity that could not be delivered, not forecasting skill.** Outages and load "
+        "shedding cut actual demand in these windows, so reported demand fell below what "
+        "customers would have used, while the forecast still assumed they would be served. "
+        "Their high ratios and positive window bias (for example ERCO during Uri) should not be "
+        "read as forecast failures.\n",
+        f"Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast; {OUTAGE_MARK} as "
+        "above):\n",
         markdown_table(
             [
                 "#",
@@ -810,9 +844,10 @@ def q5_section(r: Results) -> list[str]:
             else "None."
         )
         + "\n",
-        "Step 2 of the plan (comparing a few weeks against the operator's own published load "
-        "and day-ahead forecast) needs downloads from outside EIA and has not been done; we ask "
-        "before downloading anything.\n",
+        "Step 2 of the plan, the comparison with the operator's own published load and "
+        "day-ahead forecast, was approved by the user on 2026-10-28 for CAISO (2025 and Jan–Jun "
+        "2026) and SPP (2025): `results/operator_check.md`. FPL has no public hourly forecast "
+        "archive that we know of.\n",
     ]
 
 
@@ -827,6 +862,8 @@ def robustness_section(r: Results) -> list[str]:
                 fmt(v["median"], 2),
                 fmt(v["national"], 2),
                 fmt(v["slope"], 3),
+                fmt(v["national_slope"], 3),
+                f"{v['national_p']:.3f} ({v['national_verdict']})",
                 f"{v['worse']} / {v['better']}",
                 fmt(v["rho"], 3),
                 fmt(v["losing"], 0),
@@ -840,12 +877,18 @@ def robustness_section(r: Results) -> list[str]:
                 fmt(v["tested"], 0),
                 fmt(v["q4"], 0),
                 fmt(v["hours"], 0),
+                " / ".join(str(v["median_ranks"][y]) for y in RANKED_YEARS),
+                " / ".join(str(v["national_ranks"][y]) for y in RANKED_YEARS),
             ]
         )
+    ranked = " / ".join(map(str, RANKED_YEARS))
     return [
         "## Robustness\n",
         "Each variant re-runs the whole audit with one change. Eligibility, the panel and the "
-        "Q4 BAs are recomputed for each variant (counts in the second table).\n",
+        "Q4 BAs are recomputed for each variant (counts in the second table). The national "
+        "panel trend is the Theil–Sen slope and two-sided Mann–Kendall test of the panel's "
+        'yearly Σ|e| / Σ demand; its "worse" verdict in the main run rests on p = '
+        f"{r.robustness['Main']['national_p']:.3f}, so it is shown for every variant.\n",
         markdown_table(
             [
                 "Variant",
@@ -853,6 +896,8 @@ def robustness_section(r: Results) -> list[str]:
                 f"Median {YEAR} MAPE (%)",
                 f"National {YEAR} WAPE (%)",
                 "Panel-median slope 2016–2025 (pp/yr)",
+                "National panel slope 2016–2025 (pp/yr)",
+                "National panel trend p (verdict)",
                 "BAs worse / better (Q2)",
                 "Spearman ρ (Q4)",
                 f"BAs losing to naive in {YEAR} (Q5)",
@@ -861,6 +906,7 @@ def robustness_section(r: Results) -> list[str]:
             left_columns=2,
         )
         + "\n",
+        f"Ranks: where {ranked} fall among the ten panel years, 1 being the highest error.\n",
         markdown_table(
             [
                 "Variant",
@@ -869,6 +915,8 @@ def robustness_section(r: Results) -> list[str]:
                 "BAs tested for trend",
                 "Q4 BAs",
                 "Scored hours 2016–2025",
+                f"Rank of {ranked}, panel median",
+                f"Rank of {ranked}, national",
             ],
             count_rows,
         )
