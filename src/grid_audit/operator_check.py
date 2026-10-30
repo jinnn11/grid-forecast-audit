@@ -294,7 +294,9 @@ def files_section(files: pd.DataFrame, revised: int) -> list[str]:
         "(OASIS counts its 31-day limit in Pacific days; the first five files used 08:00 UTC "
         "and are kept). OASIS names its files by request time, so they are cached as "
         "`CAISO_SLD_FCST_<run>_<month>_<UTC window>.zip`. No account, login or terms were "
-        "needed.",
+        "needed. On 2026-10-30 a further 13 months were fetched to date CISO's one-hour lag "
+        "(July 2016–2024, then Jan 2016, Sep 2016 and Jun 2022; `results/ciso_check.md`); "
+        "they are listed here but not used below.",
         "- SPP Marketplace portal, folder `mtlf-vs-actual`: one file per issue hour with the "
         "mid-term load forecast (MTLF) and the averaged actual load. No account, login or terms "
         "were needed. To find which issue is SPP's day-ahead forecast, all 24 issues of "
@@ -397,9 +399,12 @@ def caiso_conclusion(c25: Comparison, c26: Comparison) -> list[str]:
         f"forecast is {signed(own.bias)} its own actual load in 2025 and "
         f"{signed(own26.bias)} in Jan–Jun 2026 (MAPE {fmt(own.mape, 2)}% and "
         f"{fmt(own26.mape, 2)}%). With CAISO's own data, CISO {loses} to the naive forecast "
-        f"in 2025 (skill {fmt(own.skill, 2)}).",
-        "  - The audit found the same lead in 2023 and 2024. Those years are outside the "
-        "approved data, so this check cannot say whether the same offset explains them.",
+        f"in 2025 (skill {fmt(own.skill, 2)}). Most of that gap is battery charging, which "
+        "CAISO's actual load counts and its day-ahead forecast leaves out "
+        "(`results/ciso_check.md`).",
+        "  - The same late demand covers 2016-01 to 2016-09-12 and 2022-06-14 to 2025-12-02, "
+        "checked against CAISO's data back to 2016 (approved 2026-10-30; "
+        "`results/ciso_check.md`).",
     ]
 
 

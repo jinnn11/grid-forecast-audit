@@ -10,6 +10,10 @@ from grid_audit.download import fetch_url
 from grid_audit.operators import (
     alignment,
     caiso_series,
+    charging_fit,
+    demand_moved_back,
+    forecast_replaced,
+    lead_by_month,
     monthly,
     moved,
     oasis_file,
@@ -17,6 +21,8 @@ from grid_audit.operators import (
     oasis_url,
     oasis_window,
     offset_runs,
+    ramp_match,
+    ramp_runs,
     read_oasis,
     read_spp,
     score,
@@ -360,3 +366,102 @@ def test_score_table_skill() -> None:
     table = score_table(hours)
     assert table.loc[("EIA-930", "EIA-930"), "skill"] == pytest.approx(0.25)
     assert table.loc[("Operator", "Operator"), "skill"] == pytest.approx(0.0)
+
+
+def test_lead_by_month_finds_a_forecast_one_hour_early() -> None:
+    index = pd.date_range("2025-01-01 01:00", periods=6, freq="h", tz="UTC")
+    demand = pd.Series([100.0, 200.0, 400.0, 200.0, 100.0, 200.0], index=index)
+    # The forecast for t is demand at t + 1 (one hour early); the last value is 100.
+    forecast = pd.Series([200.0, 400.0, 200.0, 100.0, 200.0, 100.0], index=index)
+    month = pd.Series(pd.Period("2025-01", "M"), index=index)
+    table = lead_by_month(forecast, demand, month)
+    # Hours 2-5 have all three moved forecasts. +1: exact (0). As published: |400-200|/200,
+    # |200-400|/400, |100-200|/200, |200-100|/100 = 100, 50, 50, 100% -> 75. Moved -1 (value
+    # for t + 1): 200 vs 200, 100 vs 400, 200 vs 200, 100 vs 100 -> 0, 75, 0, 0 -> 18.75.
+    row = table.loc[pd.Period("2025-01", "M")]
+    assert row[1] == 0.0 and row[0] == 75.0 and row[-1] == 18.75
+    assert row["best"] == 1
+
+
+def test_charging_fit_recovers_an_exact_relation() -> None:
+    storage = pd.Series([-100.0, -200.0, 50.0, 100.0, 0.0, -50.0])
+    # gap = 10 + 0.9 x charging - 0.1 x discharging: 10 + 90, 10 + 180, 10 - 5, 10 - 10, 10;
+    # the last hour has no gap and is left out.
+    gap = pd.Series([100.0, 190.0, 5.0, 0.0, 10.0, NAN])
+    fit = charging_fit(gap, storage)
+    assert fit["hours"] == 5
+    assert fit["intercept"] == pytest.approx(10.0)
+    assert fit["charging"] == pytest.approx(0.9)
+    assert fit["discharging"] == pytest.approx(-0.1)
+    assert fit["r2"] == pytest.approx(1.0)
+
+
+def hourly_two_bas() -> tuple[pd.DataFrame, pd.DatetimeIndex]:
+    index = pd.date_range("2025-06-01 01:00", periods=5, freq="h", tz="UTC")
+    a = pd.DataFrame(
+        {
+            "ba": "A",
+            "utc": index,
+            "demand": [10.0, 20.0, 30.0, 40.0, 50.0],
+            "forecast": 5.0,
+            "demand_imputed": [NAN, NAN, 33.0, NAN, NAN],
+            "demand_adjusted": [10.0, 20.0, 33.0, 40.0, 50.0],
+        }
+    )
+    b = a.assign(ba="B", demand=[1.0, 2.0, 3.0, 4.0, 5.0], demand_imputed=NAN)
+    return pd.concat([a, b], ignore_index=True), index
+
+
+def test_demand_moved_back_takes_the_next_hour() -> None:
+    hourly, t = hourly_two_bas()
+    corrected = demand_moved_back(hourly, "A", ((t[1], t[3]),))
+    a = corrected[corrected["ba"].eq("A")]
+    # Hours 2-4 take hours 3-5's values; hour 4, the span's last, would need the true value
+    # for hour 4, which the data do not have (hour 5 is on time), so it is blank.
+    assert a["demand"].tolist()[:3] == [10.0, 30.0, 40.0]
+    assert pd.isna(a["demand"].iloc[3]) and a["demand"].iloc[4] == 50.0
+    # EIA's imputed and adjusted values travel with the demand: 33 moves from hour 3 to 2.
+    assert a["demand_imputed"].iloc[1] == 33.0 and a["demand_imputed"].iloc[2:].isna().all()
+    assert a["demand_adjusted"].tolist()[:3] == [10.0, 33.0, 40.0]
+    assert corrected[corrected["ba"].eq("B")].equals(hourly[hourly["ba"].eq("B")])
+    # Two spans, hours 1-2 and 4-5: 1 <- 2 (20), 2 blank, 3 kept, 4 <- 5 (50), 5 blank.
+    two = demand_moved_back(hourly, "A", ((t[0], t[1]), (t[3], t[4])))
+    values = two.loc[two["ba"].eq("A"), "demand"].tolist()
+    assert values[0] == 20.0 and pd.isna(values[1]) and values[2:4] == [30.0, 50.0]
+    assert pd.isna(values[4])
+
+
+def test_forecast_replaced() -> None:
+    hourly, t = hourly_two_bas()
+    replacement = pd.Series([7.0, 8.0], index=t[1:3])
+    corrected = forecast_replaced(hourly, "A", replacement, t[1], t[3])
+    # Hours 2 and 3 replaced; hour 4 is in the span but has no replacement, so it is blank.
+    forecast = corrected.loc[corrected["ba"].eq("A"), "forecast"].tolist()
+    assert forecast[:3] == [5.0, 7.0, 8.0] and pd.isna(forecast[3]) and forecast[4] == 5.0
+    assert corrected.loc[corrected["ba"].eq("B"), "forecast"].eq(5.0).all()
+
+
+def test_ramp_match_ignores_a_level_difference() -> None:
+    index = pd.date_range("2025-01-01 01:00", periods=5, freq="h", tz="UTC")
+    eia = pd.Series([100.0, 110.0, 130.0, 120.0, 140.0], index=index)
+    # The operator reports each hour one hour early and 50 MW higher.
+    operator = pd.Series([150.0, 160.0, 180.0, 170.0, 190.0], index=index - pd.Timedelta("1h"))
+    ramps = ramp_match(eia, operator, shifts=(0, 1))
+    # Moved +1 h the changes are identical: correlation 1, despite the 50 MW gap.
+    assert ramps[1] == pytest.approx(1.0)
+    # As published, the changes at hours 3-5 are EIA (10, 20, -10) against the operator's
+    # (20, -10, 20): deviations from the means (20/3, 10) are (10/3, 40/3, -50/3) and
+    # (10, -20, 10), so r = -400 / sqrt(4200/9 x 600) = -0.756.
+    assert ramps[0] == pytest.approx(-400 / (4200 / 9 * 600) ** 0.5)
+
+
+def test_ramp_runs_by_day() -> None:
+    index = pd.date_range("2025-01-01 01:00", periods=48, freq="h", tz="UTC")
+    eia = pd.Series([100.0 + (37 * i) % 50 for i in range(48)], index=index)
+    # Day 1: the operator's value for t is EIA's for t + 1 (one hour early); day 2: on time.
+    early = pd.Series(eia.to_numpy()[1:25], index=index[:24])
+    operator = pd.concat([early, eia.iloc[24:]])
+    day = pd.Series([pd.Timestamp("2025-01-01")] * 24 + [pd.Timestamp("2025-01-02")] * 24)
+    runs = ramp_runs(eia, operator, day.set_axis(index))
+    assert runs["shift"].tolist() == [1, 0]
+    assert runs["days"].tolist() == [1, 1]

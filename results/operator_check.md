@@ -8,8 +8,8 @@ Step 2 of the plan's Q5 checks, for the 10 largest BAs that lose to the naive fo
   - EIA's CISO forecast is CAISO's own day-ahead forecast, unshifted, in 100.0% of hours in both periods.
   - EIA's CISO demand is CAISO's actual load one hour late on 333 of the 334 days with data from 2025-01-01 to 2025-12-02: it lines up with CAISO's load moved +1 h (mean gap 0.62%, against 3.25% as published). From 2025-12-03 it lines up as published, which is why the shift did not help in Jan–Jun 2026.
   - Against its own load, CAISO's forecast does best as published (MAPE 7.34%, 8.65% moved +1 h).
-  - The rest of CISO's error is in CAISO's own published series: its day-ahead forecast is 6.9% below its own actual load in 2025 and 8.6% below in Jan–Jun 2026 (MAPE 7.34% and 8.79%). With CAISO's own data, CISO would still lose to the naive forecast in 2025 (skill -0.53).
-  - The audit found the same lead in 2023 and 2024. Those years are outside the approved data, so this check cannot say whether the same offset explains them.
+  - The rest of CISO's error is in CAISO's own published series: its day-ahead forecast is 6.9% below its own actual load in 2025 and 8.6% below in Jan–Jun 2026 (MAPE 7.34% and 8.79%). With CAISO's own data, CISO would still lose to the naive forecast in 2025 (skill -0.53). Most of that gap is battery charging, which CAISO's actual load counts and its day-ahead forecast leaves out (`results/ciso_check.md`).
+  - The same late demand covers 2016-01 to 2016-09-12 and 2022-06-14 to 2025-12-02, checked against CAISO's data back to 2016 (approved 2026-10-30; `results/ciso_check.md`).
 - **SWPP's over-forecast comes from EIA-930's forecast data, not from SPP's forecast.**
   - Until 2025-05-06 EIA's SWPP forecast follows SPP's own day-ahead forecast: within 2% on 122 of 125 days. From 2025-05-07 to 2025-12-31 it is more than 2% away on 219 of 238 days, at 1.11–1.14 times SPP's forecast by monthly median in May–Dec.
   - EIA's SWPP demand matches SPP's actual load throughout (monthly medians 0.998–1.004).
@@ -40,10 +40,10 @@ Cached under `data/raw/operators/`, one at a time; each file's URL, size, downlo
 
 | Source | Files | Bytes | Downloaded (UTC) |
 | :-- | --: | --: | --: |
-| CAISO | 36 | 8,002,859 | 2026-10-28 22:04:59 to 2026-10-28 22:25:04 |
+| CAISO | 60 | 11,211,084 | 2026-10-28 22:04:59 to 2026-10-30 11:16:29 |
 | SPP | 389 | 3,596,689 | 2026-10-28 22:05:45 to 2026-10-28 22:41:16 |
 
-- CAISO OASIS, query `SLD_FCST`, area `CA ISO-TAC` (the CAISO balancing authority area): `DAM` is "Demand Forecast Day Ahead", `ACTUAL` is "Total Actual Hourly Integrated Load". One query per month and run, Pacific midnight to Pacific midnight (OASIS counts its 31-day limit in Pacific days; the first five files used 08:00 UTC and are kept). OASIS names its files by request time, so they are cached as `CAISO_SLD_FCST_<run>_<month>_<UTC window>.zip`. No account, login or terms were needed.
+- CAISO OASIS, query `SLD_FCST`, area `CA ISO-TAC` (the CAISO balancing authority area): `DAM` is "Demand Forecast Day Ahead", `ACTUAL` is "Total Actual Hourly Integrated Load". One query per month and run, Pacific midnight to Pacific midnight (OASIS counts its 31-day limit in Pacific days; the first five files used 08:00 UTC and are kept). OASIS names its files by request time, so they are cached as `CAISO_SLD_FCST_<run>_<month>_<UTC window>.zip`. No account, login or terms were needed. On 2026-10-30 a further 13 months were fetched to date CISO's one-hour lag (July 2016–2024, then Jan 2016, Sep 2016 and Jun 2022; `results/ciso_check.md`); they are listed here but not used below.
 - SPP Marketplace portal, folder `mtlf-vs-actual`: one file per issue hour with the mid-term load forecast (MTLF) and the averaged actual load. No account, login or terms were needed. To find which issue is SPP's day-ahead forecast, all 24 issues of 2025-01-01 were fetched: EIA-930's SWPP forecast for 2025-01-02 equals the 03:00 issue in all 24 hours and no other issue in more than one. SPP's day-ahead forecast for each day of 2025 is taken as the 03:00 issue of the day before (04:00 on 2025-03-09, when clocks go forward and SPP has no 03:00 file). Over the year EIA's forecast follows it closely but is rarely identical (see the findings), so EIA most often reports another issue. The actual load comes from the same files (the latest issue wins; 362 hours differ between issues).
 - SPP keeps 2024 only as a yearly archive (`2024.zip`), which holds a year of data outside the approval and was not fetched. Without its 2024-12-31 issue, SPP's forecast for 2025-01-01 is missing; that day's actual load is covered.
 

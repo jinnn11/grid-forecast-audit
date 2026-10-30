@@ -78,7 +78,7 @@ Per BA: yearly MAPE over its eligible years, for the 52 BAs with at least 8. Slo
 Across BAs: the 50-BA panel eligible in every year 2016–2025.
 
 - Median MAPE across the panel: slope 0.010 points per year, Mann–Kendall S = 9, p = 0.474 (no clear trend).
-- National figure on the panel: slope 0.061 points per year, S = 23, p = 0.049 (worse). The verdict sits close to the 0.05 bar; the Robustness section shows it for every variant.
+- National figure on the panel: slope 0.061 points per year, S = 23, p = 0.049 (worse). The verdict sits close to the 0.05 bar; the Robustness section shows it for every variant. With the two verified data corrections (CISO's late demand, SWPP's forecast) it is no clear trend (p = 0.210).
 - Among the ten panel years (1: the highest error), 2024 ranks 3 and 2025 ranks 1 on the panel median, and 2024 ranks 5 and 2025 ranks 1 on the national figure.
 
 | Year | Panel median MAPE (%) | Panel national WAPE (%) |
@@ -195,10 +195,10 @@ MAPE in the event window against the same BA's hours in the 14 days before and a
 | 1 | South Central US cold | 2018-01-16 to 01-18 | 3 of 4 | 2.70 | 2.84 | 1.21 | 2 |
 | 2 | Polar vortex | 2019-01-29 to 02-01 | 4 of 4 | 3.49 | 2.88 | 1.05 | 2 |
 | 3 | Winter Storm Uri† | 2021-02-13 to 02-20 | 5 of 5 | 6.41 | 4.50 | 1.47 | 5 |
-| 4 | California heat wave | 2020-08-13 to 08-16 | 5 of 5 | 3.43 | 3.79 | 0.76 | 2 |
-| 5 | Pacific Northwest heat dome | 2021-06-27 to 07-01 | 10 of 10 | 6.00 | 3.87 | 1.51 | 8 |
-| 6 | Western heat wave | 2022-09-05 to 09-07 | 5 of 5 | 4.02 | 3.88 | 1.53 | 4 |
-| 7 | Winter Storm Elliott | 2022-12-21 to 12-26 | 14 of 14 | 4.34 | 3.21 | 1.35 | 13 |
+| 4 | California heat wave† | 2020-08-13 to 08-16 | 5 of 5 | 3.43 | 3.79 | 0.76 | 2 |
+| 5 | Pacific Northwest heat dome† | 2021-06-27 to 07-01 | 10 of 10 | 6.00 | 3.87 | 1.51 | 8 |
+| 6 | Western heat wave† | 2022-09-05 to 09-07 | 5 of 5 | 4.02 | 3.88 | 1.53 | 4 |
+| 7 | Winter Storm Elliott† | 2022-12-21 to 12-26 | 14 of 14 | 4.34 | 3.21 | 1.35 | 13 |
 | 8 | Texas heat | 2023-09-05 to 09-07 | 1 of 1 | 1.93 | 2.20 | 0.88 | 0 |
 | 9 | Winter Storms Gerri and Heather | 2024-01-10 to 01-17 | 9 of 9 | 3.27 | 2.82 | 1.15 | 7 |
 | 10 | Hurricane Harvey† | 2017-08-24 to 08-28 | 2 of 2 | 2.95 | 2.33 | 1.33 | 1 |
@@ -212,7 +212,15 @@ MAPE in the event window against the same BA's hours in the 14 days before and a
 | 18 | Hurricane Helene† | 2024-09-25 to 09-29 | 12 of 12 | 8.75 | 4.47 | 1.59 | 7 |
 | 19 | Hurricane Milton† | 2024-10-08 to 10-12 | 8 of 8 | 8.00 | 6.94 | 1.16 | 4 |
 
-† **Winter Storm Uri and the hurricanes: these "errors" mostly measure electricity that could not be delivered, not forecasting skill.** Outages and load shedding cut actual demand in these windows, so reported demand fell below what customers would have used, while the forecast still assumed they would be served. Their high ratios and positive window bias (for example ERCO during Uri) should not be read as forecast failures.
+† Outages or load shedding cut actual demand in the marked windows, so reported demand fell below what customers would have used, while the forecast still assumed they would be served. **For Winter Storm Uri and the hurricanes, these "errors" mostly measure electricity that could not be delivered, not forecasting skill.** Their high ratios and positive window bias (for example ERCO during Uri) should not be read as forecast failures. The other marked events also had documented load shedding, but in fewer BAs and for hours rather than days (table below), so there the mark means part of the error may be undelivered electricity, mainly in the BAs named. Events without documented firm load shedding (1, 2, 8, 9) are not marked; `data/load_shedding.csv` gives the source and quote for every non-hurricane event.
+
+| # | Event | Listed BAs that shed load | What was shed | Source |
+| :-- | :-- | :-- | :-- | :-- |
+| 3 | Winter Storm Uri | ERCO SWPP MISO | ERCOT up to 20,000 MW (Feb 15-17); SPP up to 2,718 MW (Feb 15-16); MISO South 2,000 MW for transmission emergencies and up to 700 MW for an energy emergency (Feb 15-16). AECI and SPA are not named. | <https://nerc.com/pa/rrm/ea/Documents/February_2021_Cold_Weather_Report.pdf> |
+| 4 | California heat wave | CISO | Rotating outages ordered by CAISO: two 500 MW blocks for about an hour on Aug 14 and one 500 MW block for 20 minutes on Aug 15. None documented for BANC, LDWP, IID or TIDC. | <https://www.caiso.com/documents/preliminary-root-cause-analysis-rotating-outages-august-2020.pdf> |
+| 5 | Pacific Northwest heat dome | AVA | Avista rotating outages in Spokane: unplanned on Jun 28, planned protective outages on Jun 29, to relieve strain on its own system rather than for a regional supply shortfall. | <http://web.archive.org/web/20260103010132/https://investor.avistacorp.com/node/25381/pdf> |
+| 6 | Western heat wave | CISO | 46 MW shed in error from 17:53 PDT on Sep 6 by the Northern California Power Agency's member cities inside the CAISO area (Alameda, Lodi, Santa Clara, Palo Alto, Healdsburg, Ukiah); CAISO ordered none. | <https://www.publicadvocates.cpuc.ca.gov/-/media/cal-advocates-website/files/press-room/reports-and-analyses/220922-caladvocates-sept-22-heat-wave-analysis---full.pdf> <https://www.ncpa.com/wp-content/uploads/2022/09/NCPA_EEA3-Press-Release-Final-090722.pdf> |
+| 7 | Winter Storm Elliott | TVA DUK CPLE CPLW LGEE SCEG SC SWPP | Firm load shed on Dec 23-24 (FERC-NERC table): TVA over 3,000 MW, Duke Energy Carolinas 1,000, Duke Energy Progress 961 (not split between CPLE and CPLW), LG&E/KU 317, Dominion Energy South Carolina 94.7, Santee Cooper 86.4. Local transmission operators in SPP shed 29 MW on Dec 22 for a local problem. PJM did not shed. | <https://www.ferc.gov/sites/default/files/2023-11/24_Winter-Storm_Elliot_1107_1300.pdf> |
 
 Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast; † as above):
 
@@ -231,40 +239,40 @@ Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast; † as ab
 | 3† | **MISO** | 192 | 4.52 | 1.85 | 672 | 2.11 | 1.20 | 2.14 |
 | 3† | AECI | 192 | 5.98 | 1.67 | 672 | 4.50 | -0.66 | 1.33 |
 | 3† | SPA | 192 | 12.47 | 5.02 | 672 | 12.03 | 6.27 | 1.04 |
-| 4 | **CISO** | 44 | 1.73 | 0.10 | 396 | 3.20 | 1.90 | 0.54 |
-| 4 | BANC | 92 | 4.51 | -3.38 | 623 | 3.59 | 1.00 | 1.26 |
-| 4 | LDWP | 96 | 10.58 | -7.81 | 672 | 8.43 | -0.43 | 1.26 |
-| 4 | IID | 96 | 2.87 | -2.13 | 647 | 3.79 | 0.96 | 0.76 |
-| 4 | TIDC | 96 | 3.43 | -0.13 | 672 | 4.74 | 2.62 | 0.72 |
-| 5 | AVA | 120 | 2.34 | -0.32 | 624 | 2.16 | 0.06 | 1.08 |
-| 5 | BPAT | 120 | 3.12 | 0.31 | 624 | 1.93 | 0.56 | 1.62 |
-| 5 | PSEI | 120 | 40.13 | -41.10 | 624 | 21.32 | -21.01 | 1.88 |
-| 5 | SCL | 120 | 7.30 | -6.34 | 623 | 4.81 | -4.16 | 1.52 |
-| 5 | TPWR | 120 | 5.81 | 1.50 | 624 | 2.90 | 0.90 | 2.00 |
-| 5 | PGE | 120 | 7.78 | 7.52 | 624 | 2.39 | 0.27 | 3.26 |
-| 5 | PACW | 120 | 4.20 | 2.69 | 624 | 3.82 | 2.93 | 1.10 |
-| 5 | CHPD‡ | 120 | 117.04 | 113.35 | 624 | 125.57 | 117.86 | 0.93 |
-| 5 | DOPD | 120 | 3.72 | 2.58 | 624 | 3.92 | 2.55 | 0.95 |
-| 5 | GCPD | 120 | 6.19 | -5.83 | 624 | 4.14 | -3.65 | 1.49 |
-| 6 | **CISO** | 71 | 4.02 | -2.46 | 647 | 3.88 | -1.02 | 1.04 |
-| 6 | BANC | 72 | 3.59 | -1.19 | 672 | 2.07 | 0.50 | 1.73 |
-| 6 | LDWP | 72 | 17.63 | -17.88 | 672 | 7.94 | -0.77 | 2.22 |
-| 6 | IID | 72 | 6.13 | 1.61 | 670 | 4.00 | -0.30 | 1.53 |
-| 6 | TIDC | 72 | 3.05 | -1.41 | 672 | 3.35 | -0.48 | 0.91 |
-| 7 | **PJM** | 144 | 3.87 | -1.58 | 600 | 3.19 | -1.05 | 1.21 |
-| 7 | **MISO** | 144 | 4.23 | 2.75 | 600 | 2.77 | 2.55 | 1.53 |
-| 7 | **TVA** | 144 | 3.56 | 0.30 | 600 | 2.60 | 0.66 | 1.37 |
-| 7 | DUK | 144 | 4.27 | -1.12 | 600 | 3.24 | 0.23 | 1.32 |
-| 7 | CPLE | 144 | 6.29 | 3.25 | 600 | 3.35 | -0.54 | 1.88 |
-| 7 | CPLW | 144 | 7.91 | -4.87 | 600 | 4.44 | 1.07 | 1.78 |
-| 7 | **SOCO** | 144 | 1.57 | -1.07 | 600 | 1.71 | -1.19 | 0.92 |
-| 7 | LGEE | 144 | 7.66 | -8.04 | 600 | 7.63 | -7.25 | 1.00 |
-| 7 | SC | 144 | 5.70 | 4.40 | 600 | 2.96 | 1.66 | 1.92 |
-| 7 | SCEG | 144 | 6.90 | -1.64 | 600 | 4.39 | -2.44 | 1.57 |
-| 7 | AECI | 144 | 5.87 | -3.14 | 600 | 3.94 | -0.21 | 1.49 |
-| 7 | **NYIS** | 144 | 3.46 | -3.27 | 600 | 2.72 | -2.67 | 1.27 |
-| 7 | **ISNE** | 144 | 2.96 | -1.17 | 600 | 2.33 | -1.36 | 1.27 |
-| 7 | **SWPP** | 144 | 4.40 | 1.60 | 600 | 4.03 | 3.05 | 1.09 |
+| 4† | **CISO** | 44 | 1.73 | 0.10 | 396 | 3.20 | 1.90 | 0.54 |
+| 4† | BANC | 92 | 4.51 | -3.38 | 623 | 3.59 | 1.00 | 1.26 |
+| 4† | LDWP | 96 | 10.58 | -7.81 | 672 | 8.43 | -0.43 | 1.26 |
+| 4† | IID | 96 | 2.87 | -2.13 | 647 | 3.79 | 0.96 | 0.76 |
+| 4† | TIDC | 96 | 3.43 | -0.13 | 672 | 4.74 | 2.62 | 0.72 |
+| 5† | AVA | 120 | 2.34 | -0.32 | 624 | 2.16 | 0.06 | 1.08 |
+| 5† | BPAT | 120 | 3.12 | 0.31 | 624 | 1.93 | 0.56 | 1.62 |
+| 5† | PSEI | 120 | 40.13 | -41.10 | 624 | 21.32 | -21.01 | 1.88 |
+| 5† | SCL | 120 | 7.30 | -6.34 | 623 | 4.81 | -4.16 | 1.52 |
+| 5† | TPWR | 120 | 5.81 | 1.50 | 624 | 2.90 | 0.90 | 2.00 |
+| 5† | PGE | 120 | 7.78 | 7.52 | 624 | 2.39 | 0.27 | 3.26 |
+| 5† | PACW | 120 | 4.20 | 2.69 | 624 | 3.82 | 2.93 | 1.10 |
+| 5† | CHPD‡ | 120 | 117.04 | 113.35 | 624 | 125.57 | 117.86 | 0.93 |
+| 5† | DOPD | 120 | 3.72 | 2.58 | 624 | 3.92 | 2.55 | 0.95 |
+| 5† | GCPD | 120 | 6.19 | -5.83 | 624 | 4.14 | -3.65 | 1.49 |
+| 6† | **CISO** | 71 | 4.02 | -2.46 | 647 | 3.88 | -1.02 | 1.04 |
+| 6† | BANC | 72 | 3.59 | -1.19 | 672 | 2.07 | 0.50 | 1.73 |
+| 6† | LDWP | 72 | 17.63 | -17.88 | 672 | 7.94 | -0.77 | 2.22 |
+| 6† | IID | 72 | 6.13 | 1.61 | 670 | 4.00 | -0.30 | 1.53 |
+| 6† | TIDC | 72 | 3.05 | -1.41 | 672 | 3.35 | -0.48 | 0.91 |
+| 7† | **PJM** | 144 | 3.87 | -1.58 | 600 | 3.19 | -1.05 | 1.21 |
+| 7† | **MISO** | 144 | 4.23 | 2.75 | 600 | 2.77 | 2.55 | 1.53 |
+| 7† | **TVA** | 144 | 3.56 | 0.30 | 600 | 2.60 | 0.66 | 1.37 |
+| 7† | DUK | 144 | 4.27 | -1.12 | 600 | 3.24 | 0.23 | 1.32 |
+| 7† | CPLE | 144 | 6.29 | 3.25 | 600 | 3.35 | -0.54 | 1.88 |
+| 7† | CPLW | 144 | 7.91 | -4.87 | 600 | 4.44 | 1.07 | 1.78 |
+| 7† | **SOCO** | 144 | 1.57 | -1.07 | 600 | 1.71 | -1.19 | 0.92 |
+| 7† | LGEE | 144 | 7.66 | -8.04 | 600 | 7.63 | -7.25 | 1.00 |
+| 7† | SC | 144 | 5.70 | 4.40 | 600 | 2.96 | 1.66 | 1.92 |
+| 7† | SCEG | 144 | 6.90 | -1.64 | 600 | 4.39 | -2.44 | 1.57 |
+| 7† | AECI | 144 | 5.87 | -3.14 | 600 | 3.94 | -0.21 | 1.49 |
+| 7† | **NYIS** | 144 | 3.46 | -3.27 | 600 | 2.72 | -2.67 | 1.27 |
+| 7† | **ISNE** | 144 | 2.96 | -1.17 | 600 | 2.33 | -1.36 | 1.27 |
+| 7† | **SWPP** | 144 | 4.40 | 1.60 | 600 | 4.03 | 3.05 | 1.09 |
 | 8 | **ERCO** | 72 | 1.93 | -1.28 | 648 | 2.20 | 0.93 | 0.88 |
 | 9 | **ERCO** | 192 | 3.96 | -0.17 | 624 | 3.78 | -0.30 | 1.05 |
 | 9 | **SWPP** | 164 | 4.47 | -3.81 | 585 | 2.38 | -0.06 | 1.88 |
@@ -431,7 +439,7 @@ Step 1 of the plan's checks. Repeated forecast: share of the BA-year's usable ho
 | FPL 2017 | -0.08 | 0.0 | 7.08 / 8.70 / 6.24 / 6.58 / 8.48 | none | 7 (0.1%) | 0 | none | Jan, Feb, Mar, Jun, Jul, Nov, Dec | 13 of 24: 1-5, 17-24 |
 | SWPP 2025 | -0.79 | 0.0 | 8.69 / 8.14 / 7.76 / 8.13 / 9.00 | none | 63 (0.7%) | 0 | none | May, Jun, Jul, Aug, Sep, Oct, Nov, Dec | 24 of 24: 1-24 |
 
-Step 2 of the plan, the comparison with the operator's own published load and day-ahead forecast, was approved by the user on 2026-10-28 for CAISO (2025 and Jan–Jun 2026) and SPP (2025): `results/operator_check.md`. FPL has no public hourly forecast archive that we know of.
+Step 2 of the plan, the comparison with the operator's own published load and day-ahead forecast, was approved by the user on 2026-10-28 for CAISO (2025 and Jan–Jun 2026) and SPP (2025): `results/operator_check.md`. FPL has no public hourly forecast archive that we know of. The follow-ups of 2026-10-30, when CISO's late demand began and how much of CAISO's forecast gap is battery charging, are in `results/ciso_check.md`; the Robustness section re-runs the audit with the verified corrections.
 
 ## Robustness
 
@@ -445,6 +453,7 @@ Each variant re-runs the whole audit with one change. Eligibility, the panel and
 | R2 with N = 3 | Repeated-demand runs of 3 hours or more dropped | 4.16 | 4.24 | 0.010 | 0.061 | 0.049 (worse) | 11 / 9 | 0.005 | 19 |
 | R2 with N = 12 | Only runs of 12 hours or more dropped | 4.16 | 4.24 | 0.010 | 0.061 | 0.049 (worse) | 11 / 10 | -0.004 | 19 |
 | Repeated forecasts dropped | R2b (forecast runs of 6 hours or more) applied | 4.16 | 4.23 | 0.010 | 0.061 | 0.074 (no clear trend) | 11 / 10 | 0.027 | 19 |
+| Verified corrections | CISO demand moved back 1 h where EIA-930 has it an hour late; SWPP forecast from 2025-05-07 replaced by SPP's own day-ahead forecast; all rules re-applied | 4.11 | 3.80 | 0.003 | 0.032 | 0.210 (no clear trend) | 11 / 10 | -0.045 | 18 |
 
 Ranks: where 2024 / 2025 fall among the ten panel years, 1 being the highest error.
 
@@ -456,6 +465,17 @@ Ranks: where 2024 / 2025 fall among the ten panel years, 1 being the highest err
 | R2 with N = 3 | 53 | 50 | 52 | 49 | 4,574,117 | 3 / 1 | 5 / 1 |
 | R2 with N = 12 | 53 | 50 | 52 | 49 | 4,582,454 | 3 / 1 | 5 / 1 |
 | Repeated forecasts dropped | 53 | 50 | 52 | 49 | 4,574,441 | 3 / 1 | 5 / 1 |
+| Verified corrections | 53 | 50 | 52 | 49 | 4,582,016 | 3 / 2 | 6 / 4 |
+
+### Verified corrections
+
+Requested by the user on 2026-10-30: the audit re-run with the two data errors the operator checks verified, and every rule re-applied. The main run stays as published.
+
+- CISO: demand moved back one hour in the late spans of `results/ciso_check.md` (UTC hour ends 2016-01-01 09:00 to 2016-09-12 21:00, 2022-06-14 08:00 to 2022-06-15 07:00, 2022-06-16 08:00 to 2025-12-02 23:00): 36,533 hours. The last hour of each span needs a value the data do not have, so the move leaves 3 more hours blank.
+- SWPP: the forecast for the local days 2025-05-07 to 2025-12-31 replaced by SPP's own day-ahead forecast (the 03:00 issue of the day before, as in `results/operator_check.md`): 5,737 hours, of which 0 lack SPP's value. Replacing is clean enough to use: SPP's files cover the hours, and before 7 May EIA's own SWPP forecast followed this series closely, though rarely exactly (it carries another issue).
+- **2025 ranks** among the ten panel years (panel median and national): 2 and 4, against 1 and 1 in the main run.
+- **National panel trend:** 0.032 pp/yr, p = 0.210 (no clear trend), against 0.061 pp/yr, p = 0.049 (worse).
+- **BAs losing to the naive forecast in 2025:** 18, against 19. No longer losing: SWPP; newly losing: none. Skill in 2025, main → corrected: CISO -0.78 → -0.49; SWPP -0.79 → 0.54.
 
 ## Notes
 

@@ -2,6 +2,8 @@ import pandas as pd
 import pytest
 
 from grid_audit.audit import (
+    LOAD_SHEDDING_PATH,
+    WEATHER_EVENTS_PATH,
     Run,
     audit_run,
     ba_trends,
@@ -16,8 +18,12 @@ from grid_audit.audit import (
     marked_year,
     naive_source,
     panel_bas,
+    read_load_shedding,
+    read_weather_events,
+    shed_ids,
     usable_after,
     variant_rules,
+    verified_corrections,
     year_ranks,
 )
 from grid_audit.calendar import holiday_days, local_hours
@@ -284,8 +290,48 @@ def test_year_ranks() -> None:
 
 
 def test_cut_demand() -> None:
-    # Uri and the hurricanes (criterion (c)); not Elliott or the heat waves.
-    assert cut_demand(pd.Series({"event": "Winter Storm Uri", "criterion": "(a), (b)"}))
-    assert cut_demand(pd.Series({"event": "Hurricane Ida", "criterion": "(c)"}))
-    elliott = {"event": "Winter Storm Elliott", "criterion": "(a), (b) TVA and Duke load shed"}
-    assert not cut_demand(pd.Series(elliott))
+    # The hurricanes (criterion (c)) and the events with documented load shedding. Elliott was
+    # unmarked until the user asked on 2026-10-30 for every such event to be marked.
+    shed = {3, 7}
+    assert cut_demand(3, "(a), (b)", shed)  # Uri
+    assert cut_demand(15, "(c)", shed)  # Ida
+    assert cut_demand(7, "(a), (b) TVA and Duke load shed", shed)  # Elliott
+    assert not cut_demand(8, "(b) ERCOT EEA 2, Sep 6", shed)  # Texas heat, no load shed
+
+
+def test_load_shedding_file_cites_every_event() -> None:
+    shedding = read_load_shedding(LOAD_SHEDDING_PATH)
+    weather = read_weather_events(WEATHER_EVENTS_PATH).set_index("id")
+    # One row per non-hurricane event, with its name, a verdict, a source URL and a quote.
+    assert sorted(shedding["id"]) == sorted(weather.index[weather["criterion"].ne("(c)")])
+    assert (shedding["event"] == weather.loc[shedding["id"], "event"].to_numpy()).all()
+    assert shedding["load_shed"].isin(["yes", "no"]).all()
+    assert shedding["source"].str.startswith("http").all() and shedding["quote"].ne("").all()
+    # Every BA named as shedding load is on the event's list.
+    for row in shedding.itertuples():
+        assert set(row.bas.split()) <= set(weather.loc[row.id, "bas"])
+    assert shed_ids(shedding) == {3, 4, 5, 6, 7}
+
+
+def test_verified_corrections() -> None:
+    # CISO inside the last late span (2022-06-16 to 2025-12-02) and SWPP on 2025-05-07.
+    ciso_utc = pd.date_range("2025-06-01 10:00", periods=3, freq="h", tz="UTC")
+    swpp_utc = pd.DatetimeIndex([pd.Timestamp("2025-05-07 12:00", tz="UTC")])
+    hourly = pd.DataFrame(
+        {
+            "ba": ["CISO"] * 3 + ["SWPP"],
+            "utc": ciso_utc.append(swpp_utc),
+            "demand": [1.0, 2.0, 3.0, 50.0],
+            "forecast": [1.0, 1.0, 1.0, 100.0],
+            "demand_imputed": float("nan"),
+            "demand_adjusted": [1.0, 2.0, 3.0, 50.0],
+        }
+    )
+    local = pd.DataFrame({"day": pd.to_datetime(["2025-06-01"] * 3 + ["2025-05-07"])})
+    spp = pd.Series([90.0], index=swpp_utc)
+    corrected, counts = verified_corrections(hourly, local, spp)
+    # CISO hours 10-12 take hours 11-12's values; 13:00 is not in the table, so 12:00 is
+    # blank. SWPP's forecast becomes SPP's 90.
+    assert corrected["demand"].tolist()[:2] == [2.0, 3.0] and pd.isna(corrected["demand"][2])
+    assert corrected["forecast"].tolist() == [1.0, 1.0, 1.0, 90.0]
+    assert counts == {"ciso_moved": 3, "ciso_blanked": 1, "swpp_replaced": 1, "swpp_missing": 0}

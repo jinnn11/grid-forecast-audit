@@ -15,7 +15,8 @@
   identifies the snapshot the results came from.
 - `data/raw/` and `data/processed/` are gitignored. Run one download at a time.
 - Operator data (approved 2026-10-28 for the Q5 check only: CAISO OASIS 2025 to Jan–Jun 2026,
-  SPP 2025) is cached under `data/raw/operators/`. SPP files keep their own names. OASIS names
+  SPP 2025; extended 2026-10-30 to the CAISO months needed to date CISO's one-hour lag, back to
+  2016) is cached under `data/raw/operators/`. SPP files keep their own names. OASIS names
   its files by request time, so CAISO files are named by run, month and the UTC window
   requested. `results/operator_files.csv` records each file's URL, size, download time and
   SHA-256.
@@ -46,7 +47,12 @@
 - `docs/step3_audit_plan.md`: the pre-registered plan for the audit (Step 3).
 - `src/grid_audit/calendar.py`, `metrics.py`, `stats.py` (pure) and `audit.py`, `figures.py`:
   `uv run python -m grid_audit.audit` writes `results/audit.md` and `results/figures/`.
-  `data/weather_events.csv` (tracked) is the plan's event table with sources.
+  `data/weather_events.csv` (tracked) is the plan's event table with sources;
+  `data/load_shedding.csv` (tracked) records, with a source and quote, whether each
+  non-hurricane event had documented load shedding (such events are marked † in Q3).
 - `src/grid_audit/operators.py` (pure), `download_operators.py` and `operator_check.py`: the
-  operators' own load and forecasts, and `results/operator_check.md`.
+  operators' own load and forecasts, and `results/operator_check.md`. `ciso_check.py`: when
+  CISO's demand runs an hour late, and CAISO's forecast gap against battery charging,
+  `results/ciso_check.md`. The verified corrections (`operators.CISO_LATE_SPANS`,
+  `SWPP_REPLACED_DAYS`) feed only the audit's "Verified corrections" robustness variant.
 - `tests/`: tests and saved sample files.

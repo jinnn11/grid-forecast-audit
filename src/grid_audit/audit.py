@@ -27,6 +27,17 @@ from grid_audit.calendar import (
 from grid_audit.check import fmt, markdown_table
 from grid_audit.data_quality import Applied, apply_rules
 from grid_audit.metrics import lagged, metrics, naive_forecast, pooled_wape
+from grid_audit.operators import (
+    CISO_LATE_SPANS,
+    OPERATORS_DIR,
+    SWPP_REPLACED_DAYS,
+    demand_moved_back,
+    forecast_replaced,
+    read_spp,
+    spp_issues,
+    spp_name,
+    spp_series,
+)
 from grid_audit.quality import both_present, largest_bas, repeats_in_runs, short_history
 from grid_audit.quality_rules import EVENTS_PATH, PARQUET_PATH, RUN_HOURS, read_events
 from grid_audit.stats import (
@@ -39,6 +50,7 @@ from grid_audit.stats import (
 )
 
 WEATHER_EVENTS_PATH = Path("data/weather_events.csv")
+LOAD_SHEDDING_PATH = Path("data/load_shedding.csv")  # documented load shedding per event
 REPORT_PATH = Path("results/audit.md")
 YEARS = range(2016, 2026)  # 2015 and 2026 are half-years
 YEAR, BASE_YEAR = 2025, 2019  # Q1; Q4 compares BASE_YEAR with YEAR
@@ -59,6 +71,11 @@ VARIANTS = {
     "R2 with N = 3": "Repeated-demand runs of 3 hours or more dropped",
     "R2 with N = 12": "Only runs of 12 hours or more dropped",
     "Repeated forecasts dropped": f"R2b (forecast runs of {RUN_HOURS} hours or more) applied",
+    # User, 2026-10-30: the corrections the operator checks verified. The main run stays as
+    # published.
+    "Verified corrections": "CISO demand moved back 1 h where EIA-930 has it an hour late; "
+    "SWPP forecast from 2025-05-07 replaced by SPP's own day-ahead forecast; all rules "
+    "re-applied",
 }
 MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
@@ -104,6 +121,31 @@ def variant_rules(hourly: pd.DataFrame, applied: Applied) -> dict[str, dict[str,
         "Repeated forecasts dropped": main
         | {f"R2b (N = {RUN_HOURS})": repeats_in_runs(hourly, "forecast", RUN_HOURS)},
     }
+
+
+def verified_corrections(
+    hourly: pd.DataFrame, local: pd.DataFrame, spp_forecast: pd.Series
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """The hourly table with the corrections the operator checks verified, and counts of the
+    hours changed: CISO's demand moved back an hour in CISO_LATE_SPANS, and SWPP's forecast on
+    the local days SWPP_REPLACED_DAYS replaced by SPP's own day-ahead forecast."""
+    corrected = demand_moved_back(hourly, "CISO", CISO_LATE_SPANS)
+    first, last = (pd.Timestamp(day) for day in SWPP_REPLACED_DAYS)
+    swpp = hourly["ba"].eq("SWPP") & local["day"].between(first, last)
+    utc = hourly.loc[swpp, "utc"]
+    corrected = forecast_replaced(corrected, "SWPP", spp_forecast, utc.min(), utc.max())
+    ciso = hourly["ba"].eq("CISO")
+    moved_rows = pd.Series(False, index=hourly.index)
+    for a, b in CISO_LATE_SPANS:
+        moved_rows |= ciso & hourly["utc"].between(a, b)
+    counts = {
+        "ciso_moved": int(moved_rows.sum()),
+        "ciso_blanked": int((moved_rows & corrected["demand"].isna()).sum())
+        - int((moved_rows & hourly["demand"].isna()).sum()),
+        "swpp_replaced": int(swpp.sum()),
+        "swpp_missing": int((swpp & corrected["forecast"].isna()).sum()),
+    }
+    return corrected, counts
 
 
 def adjusted_truth(hourly: pd.DataFrame) -> pd.DataFrame:
@@ -236,6 +278,8 @@ def robustness_row(run: Run) -> dict[str, object]:
         "better": int(verdicts.get("better", 0)),
         "rho": spearman(points["x"], points["y"]),
         "losing": int((final["skill"] < 0).sum()),
+        "losing_bas": sorted(final.index[final["skill"] < 0]),
+        "skill": final["skill"],
         "eligible": len(final),
         "panel": len(panel),
         "tested": int(verdicts.sum()),
@@ -253,10 +297,21 @@ def season_hour(hours: pd.DataFrame) -> pd.DataFrame:
     return mape.groupby(level=["season", "hour_ending"], observed=True).median().unstack()
 
 
-def cut_demand(event: pd.Series) -> bool:
-    """Events where outages and load shedding cut actual demand (user, 2026-10-28): Winter
-    Storm Uri and the hurricanes (criterion (c))."""
-    return event["criterion"] == "(c)" or event["event"] == "Winter Storm Uri"
+def cut_demand(event_id: int, criterion: str, shed: set[int]) -> bool:
+    """Events where outages or load shedding cut actual demand: the hurricanes (criterion (c);
+    user, 2026-10-28) and the events in `shed`, with documented load shedding (user,
+    2026-10-30)."""
+    return criterion == "(c)" or event_id in shed
+
+
+def read_load_shedding(path: Path) -> pd.DataFrame:
+    shedding = pd.read_csv(path, dtype=str, keep_default_na=False)
+    shedding["id"] = shedding["id"].astype(int)
+    return shedding
+
+
+def shed_ids(shedding: pd.DataFrame) -> set[int]:
+    return set(shedding.loc[shedding["load_shed"].eq("yes"), "id"])
 
 
 def event_days(weather: pd.DataFrame) -> pd.DataFrame:
@@ -451,6 +506,8 @@ class Results:
     checks: dict[tuple[str, int], dict[str, object]]
     robustness: dict[str, dict[str, object]]
     usable_total: int
+    shedding: pd.DataFrame
+    corrections: dict[str, int]
 
 
 def q1_section(r: Results) -> list[str]:
@@ -549,7 +606,10 @@ def q2_section(r: Results) -> list[str]:
         f"Mann–Kendall S = {pt.s}, p = {pt.p:.3f} ({pt.verdict}).",
         f"- National figure on the panel: slope {fmt(nt.slope, 3)} points per year, S = {nt.s}, "
         f"p = {nt.p:.3f} ({nt.verdict}). The verdict sits close to the {ALPHA} bar; the "
-        "Robustness section shows it for every variant.",
+        "Robustness section shows it for every variant. With the two verified data corrections "
+        "(CISO's late demand, SWPP's forecast) it is "
+        f"{r.robustness['Verified corrections']['national_verdict']} (p = "
+        f"{r.robustness['Verified corrections']['national_p']:.3f}).",
         f"- Among the ten panel years (1: the highest error), {rank_text} on the panel median, "
         f"and {national_rank_text} on the national figure.\n",
         markdown_table(["Year", "Panel median MAPE (%)", "Panel national WAPE (%)"], panel_rows)
@@ -596,6 +656,11 @@ def q3_section(r: Results) -> list[str]:
         )
     ev = r.events
     weather = r.weather.set_index("id")
+    shed = shed_ids(r.shedding)
+
+    def mark(event_id: int) -> str:
+        return OUTAGE_MARK if cut_demand(event_id, weather.loc[event_id, "criterion"], shed) else ""
+
     event_rows = []
     for event_id, part in ev.groupby("id"):
         e = weather.loc[event_id]
@@ -603,7 +668,7 @@ def q3_section(r: Results) -> list[str]:
         event_rows.append(
             [
                 str(event_id),
-                e.event + (OUTAGE_MARK if cut_demand(e) else ""),
+                e.event + mark(event_id),
                 f"{e.first_day:%Y-%m-%d} to {e.last_day:%m-%d}",
                 f"{len(scored)} of {len(part)}",
                 fmt(scored["window_mape"].median(), 2),
@@ -614,7 +679,7 @@ def q3_section(r: Results) -> list[str]:
         )
     detail_rows = [
         [
-            str(d.id) + (OUTAGE_MARK if cut_demand(weather.loc[d.id]) else ""),
+            str(d.id) + mark(d.id),
             ba_label(d.ba, r.top, d.marked),
             fmt(d.window_hours, 0),
             fmt(d.window_mape, 2),
@@ -640,6 +705,17 @@ def q3_section(r: Results) -> list[str]:
                 fmt((part["ratio"] > 1).sum(), 0),
             ]
         )
+    shed_rows = [
+        [
+            str(row.id),
+            row.event,
+            " ".join(ba for ba in row.bas.split() if ba in weather.loc[row.id, "bas"]),
+            row.detail,
+            " ".join(f"<{url}>" for url in row.source.split()),
+        ]
+        for row in r.shedding[r.shedding["load_shed"].eq("yes")].itertuples()
+    ]
+    unshed = r.shedding[r.shedding["load_shed"].eq("no")]
     days = r.extreme_days
     return [
         "## Q3. When do forecasts miss most? (2016–2025)\n",
@@ -687,12 +763,23 @@ def q3_section(r: Results) -> list[str]:
             left_columns=3,
         )
         + "\n",
-        f'{OUTAGE_MARK} **Winter Storm Uri and the hurricanes: these "errors" mostly measure '
-        "electricity that could not be delivered, not forecasting skill.** Outages and load "
-        "shedding cut actual demand in these windows, so reported demand fell below what "
-        "customers would have used, while the forecast still assumed they would be served. "
-        "Their high ratios and positive window bias (for example ERCO during Uri) should not be "
-        "read as forecast failures.\n",
+        f"{OUTAGE_MARK} Outages or load shedding cut actual demand in the marked windows, so "
+        "reported demand fell below what customers would have used, while the forecast still "
+        'assumed they would be served. **For Winter Storm Uri and the hurricanes, these "errors" '
+        "mostly measure electricity that could not be delivered, not forecasting skill.** Their "
+        "high ratios and positive window bias (for example ERCO during Uri) should not be read "
+        "as forecast failures. The other marked events also had documented load shedding, but "
+        "in fewer BAs and for hours rather than days (table below), so there the mark means "
+        "part of the error may be undelivered electricity, mainly in the BAs named. Events "
+        f"without documented firm load shedding ({', '.join(map(str, unshed['id']))}) are not "
+        f"marked; `{LOAD_SHEDDING_PATH}` gives the source and quote for every non-hurricane "
+        "event.\n",
+        markdown_table(
+            ["#", "Event", "Listed BAs that shed load", "What was shed", "Source"],
+            shed_rows,
+            left_columns=5,
+        )
+        + "\n",
         f"Per event and BA (bias: Σe / Σ demand, %, positive is over-forecast; {OUTAGE_MARK} as "
         "above):\n",
         markdown_table(
@@ -847,7 +934,10 @@ def q5_section(r: Results) -> list[str]:
         "Step 2 of the plan, the comparison with the operator's own published load and "
         "day-ahead forecast, was approved by the user on 2026-10-28 for CAISO (2025 and Jan–Jun "
         "2026) and SPP (2025): `results/operator_check.md`. FPL has no public hourly forecast "
-        "archive that we know of.\n",
+        "archive that we know of. The follow-ups of 2026-10-30, when CISO's late demand began "
+        "and how much of CAISO's forecast gap is battery charging, are in "
+        "`results/ciso_check.md`; the Robustness section re-runs the audit with the verified "
+        "corrections.\n",
     ]
 
 
@@ -921,6 +1011,51 @@ def robustness_section(r: Results) -> list[str]:
             count_rows,
         )
         + "\n",
+        *corrections_text(r),
+    ]
+
+
+def corrections_text(r: Results) -> list[str]:
+    """What the verified-corrections variant changes, against the main run."""
+    v, m, c = r.robustness["Verified corrections"], r.robustness["Main"], r.corrections
+    stopped = sorted(set(m["losing_bas"]) - set(v["losing_bas"]))
+    started = sorted(set(v["losing_bas"]) - set(m["losing_bas"]))
+
+    def ranks(row: dict[str, object]) -> str:
+        return f"{row['median_ranks'][YEAR]} and {row['national_ranks'][YEAR]}"
+
+    def trend_text(row: dict[str, object]) -> str:
+        return (
+            f"{fmt(row['national_slope'], 3)} pp/yr, p = {row['national_p']:.3f} "
+            f"({row['national_verdict']})"
+        )
+
+    skills = "; ".join(
+        f"{ba} {fmt(m['skill'].get(ba, float('nan')), 2)} → "
+        f"{fmt(v['skill'].get(ba, float('nan')), 2)}"
+        for ba in ("CISO", "SWPP")
+    )
+    spans = ", ".join(f"{a:%Y-%m-%d %H:%M} to {b:%Y-%m-%d %H:%M}" for a, b in CISO_LATE_SPANS)
+    return [
+        "### Verified corrections\n",
+        "Requested by the user on 2026-10-30: the audit re-run with the two data errors the "
+        "operator checks verified, and every rule re-applied. The main run stays as published.\n",
+        f"- CISO: demand moved back one hour in the late spans of `results/ciso_check.md` "
+        f"(UTC hour ends {spans}): {fmt(c['ciso_moved'], 0)} hours. The last hour of each span "
+        "needs a value the data do not have, so the move leaves "
+        f"{fmt(c['ciso_blanked'], 0)} more hours blank.",
+        f"- SWPP: the forecast for the local days {SWPP_REPLACED_DAYS[0]} to "
+        f"{SWPP_REPLACED_DAYS[1]} replaced by SPP's own day-ahead forecast (the 03:00 issue of the "
+        f"day before, as in `results/operator_check.md`): {fmt(c['swpp_replaced'], 0)} hours, of "
+        f"which {fmt(c['swpp_missing'], 0)} lack SPP's value. Replacing is clean enough to use: "
+        "SPP's files cover the hours, and before 7 May EIA's own SWPP forecast followed this "
+        "series closely, though rarely exactly (it carries another issue).",
+        f"- **{YEAR} ranks** among the ten panel years (panel median and national): "
+        f"{ranks(v)}, against {ranks(m)} in the main run.",
+        f"- **National panel trend:** {trend_text(v)}, against {trend_text(m)}.",
+        f"- **BAs losing to the naive forecast in {YEAR}:** {v['losing']}, against "
+        f"{m['losing']}. No longer losing: {', '.join(stopped) or 'none'}; newly losing: "
+        f"{', '.join(started) or 'none'}. Skill in {YEAR}, main → corrected: {skills}.\n",
     ]
 
 
@@ -1002,7 +1137,11 @@ def write_figures(r: Results) -> None:
 
 
 def all_runs(
-    hourly: pd.DataFrame, local: pd.DataFrame, applied: Applied, ba_events: pd.DataFrame
+    hourly: pd.DataFrame,
+    local: pd.DataFrame,
+    applied: Applied,
+    ba_events: pd.DataFrame,
+    corrected: pd.DataFrame,
 ) -> tuple[Run, dict[str, dict[str, object]]]:
     """The main run, and the robustness row of every variant. Only the main run's hours are
     kept, to save memory."""
@@ -1014,10 +1153,19 @@ def all_runs(
             main_run = run
     if not main_run.usable.equals(applied.usable):
         raise RuntimeError("the main run does not reproduce data_quality.apply_rules")
-    adjusted = adjusted_truth(hourly)
-    rules = {k: v for k, v in apply_rules(adjusted, ba_events).rules.items() if k != "R3b"}
-    rows["EIA adjusted demand"] = robustness_row(audit_run(adjusted, local, rules))
+    for name, table in (
+        ("EIA adjusted demand", adjusted_truth(hourly)),
+        ("Verified corrections", corrected),
+    ):
+        rules = {k: v for k, v in apply_rules(table, ba_events).rules.items() if k != "R3b"}
+        rows[name] = robustness_row(audit_run(table, local, rules))
     return main_run, rows
+
+
+def spp_forecast() -> pd.Series:
+    """SPP's own day-ahead forecast by UTC hour end, from the cached operator files."""
+    issues = {issue: read_spp(OPERATORS_DIR / "spp" / spp_name(issue)) for issue in spp_issues()}
+    return spp_series(issues)[0]["forecast"]
 
 
 def main() -> None:
@@ -1026,7 +1174,9 @@ def main() -> None:
     weather = read_weather_events(WEATHER_EVENTS_PATH)
     local = local_hours(hourly["local"])
     applied = apply_rules(hourly, ba_events)
-    main_run, robustness = all_runs(hourly, local, applied, ba_events)
+    corrected, corrections = verified_corrections(hourly, local, spp_forecast())
+    main_run, robustness = all_runs(hourly, local, applied, ba_events, corrected)
+    del corrected
 
     yearly = main_run.yearly
     top = largest_bas(hourly)
@@ -1067,6 +1217,8 @@ def main() -> None:
         checks=checks,
         robustness=robustness,
         usable_total=int(applied.usable.sum()),
+        shedding=read_load_shedding(LOAD_SHEDDING_PATH),
+        corrections=corrections,
     )
     write_figures(results)
     REPORT_PATH.write_text(render_audit(results, hourly), encoding="utf-8")

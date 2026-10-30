@@ -1,8 +1,9 @@
 """Operators' own hourly load and day-ahead load forecasts, for the Q5 check of step 3.
 
 Approved by the user on 2026-10-28, narrowly: CAISO (OASIS) for 2025 and Jan-Jun 2026, SPP
-(Marketplace portal) for 2025. Pure functions: file names, URLs, parsing and the comparison with
-EIA-930. Downloads are in download_operators.py.
+(Marketplace portal) for 2025; and on 2026-10-30, CAISO back to 2016 where needed to date CISO's
+one-hour lag. Pure functions: file names, URLs, parsing, the comparison with EIA-930 and the
+verified corrections. Downloads are in download_operators.py.
 """
 
 import io
@@ -11,6 +12,7 @@ import zipfile
 from pathlib import Path
 from urllib.parse import quote, urlencode
 
+import numpy as np
 import pandas as pd
 
 OPERATORS_DIR = Path("data/raw/operators")
@@ -21,6 +23,15 @@ OASIS_URL = "https://oasis.caiso.com/oasisapi/SingleZip"
 CAISO_AREA = "CA ISO-TAC"  # the CAISO balancing authority area total
 CAISO_RUNS = ("DAM", "ACTUAL")
 CAISO_MONTHS = pd.period_range("2025-01", "2026-06", freq="M")
+# When CISO's one-hour lag started (user, 2026-10-30: back to 2016 if needed): first one month per
+# year (July, which has no clock change), then only the months needed to pin each change down.
+CAISO_SAMPLE_MONTHS = pd.PeriodIndex([f"{year}-07" for year in range(2016, 2025)], freq="M")
+# The sample showed EIA-930's CISO demand an hour late in July 2016 and July 2022-2024, and on time
+# in July 2017-2021. EIA-930's forecast equals CAISO's in every sampled hour, so EIA's own
+# forecast-against-demand timing, day by day, places the two switches: 2016-09-12/13 and
+# 2022-06-17 (the 2025-12-02/03 switch it also shows was already confirmed with CAISO's data).
+CAISO_PINNED_MONTHS = pd.PeriodIndex(["2016-01", "2016-09", "2022-06"], freq="M")
+CAISO_HISTORY_MONTHS = CAISO_SAMPLE_MONTHS.union(CAISO_PINNED_MONTHS)
 PACIFIC = "America/Los_Angeles"  # OASIS counts its 31-day limit in Pacific trading days
 OASIS_STAMP = "%Y%m%dT%H%M"
 
@@ -111,9 +122,8 @@ def source_url(path: Path) -> str:
 
 def planned_files(directory: Path = OPERATORS_DIR) -> list[tuple[str, Path]]:
     """Every approved file: (URL, cache path), CAISO first."""
-    files = [
-        oasis_file(run, month, directory / "caiso") for run in CAISO_RUNS for month in CAISO_MONTHS
-    ]
+    months = CAISO_HISTORY_MONTHS.union(CAISO_MONTHS)
+    files = [oasis_file(run, month, directory / "caiso") for run in CAISO_RUNS for month in months]
     files += [(spp_url(issue), directory / "spp" / spp_name(issue)) for issue in spp_issues()]
     return files
 
@@ -283,7 +293,36 @@ def offset_runs(
         if table["hours"].gt(0).all():
             k = int(table["mean_gap_pct"].idxmin())
             best[date] = k if table.loc[k, "mean_gap_pct"] <= ALIGNED_GAP_PCT else pd.NA
-    days = pd.Series(best, dtype="Int64").sort_index()
+    return day_runs(pd.Series(best, dtype="Int64"))
+
+
+def ramp_match(eia: pd.Series, operator: pd.Series, shifts: tuple[int, ...] = SHIFTS) -> pd.Series:
+    """For each shift k (the operator's series moved k hours later): the correlation of EIA's
+    hour-to-hour changes with the operator's. Unlike the gap it ignores the levels, so it shows
+    the timing even where the two series differ by a percent or two. `eia` must be hourly."""
+    changes = eia.diff()
+    return pd.Series(
+        {k: changes.corr(moved(operator, eia.index, k).diff()) for k in shifts}
+    ).rename_axis("shift")
+
+
+def ramp_runs(
+    eia: pd.Series, operator: pd.Series, day: pd.Series, shifts: tuple[int, ...] = (-1, 0, 1)
+) -> pd.DataFrame:
+    """Like offset_runs, with each day's shift the one whose hour-to-hour changes match best
+    (ramp_match), for days with at least 12 hourly changes in both series."""
+    best = {}
+    for date, part in eia.groupby(day.to_numpy()):
+        other = moved(operator, part.index, 0)
+        if (part.diff().notna() & other.diff().notna()).sum() >= 12:
+            best[date] = int(ramp_match(part, operator, shifts).idxmax())
+    return day_runs(pd.Series(best, dtype="Int64"))
+
+
+def day_runs(best: pd.Series) -> pd.DataFrame:
+    """Spans of consecutive entries of `best` (a shift per day, <NA> for none) with the same
+    value. Columns: first, last, shift and days."""
+    days = best.sort_index()
     label = pd.Series(
         ["none" if pd.isna(k) else str(k) for k in days], index=days.index, dtype=object
     )
@@ -296,3 +335,82 @@ def offset_runs(
             "days": groups.size(),
         }
     ).reset_index(drop=True)
+
+
+# CISO's lag over the years, CAISO's battery charging and the verified corrections (user,
+# 2026-10-30)
+
+# UTC hour ends in which EIA-930's CISO demand is CAISO's actual load an hour late, as checked hour
+# by hour against CAISO's data (results/ciso_check.md). The first span starts before 2016; it is
+# taken from the first hour of 2016 (Pacific), the earliest month checked.
+CISO_LATE_SPANS = tuple(
+    (pd.Timestamp(first, tz="UTC"), pd.Timestamp(last, tz="UTC"))
+    for first, last in (
+        ("2016-01-01 09:00", "2016-09-12 21:00"),
+        ("2022-06-14 08:00", "2022-06-15 07:00"),
+        ("2022-06-16 08:00", "2025-12-02 23:00"),
+    )
+)
+# EIA-930's SWPP forecast is more than 2% from SPP's own from this local day on
+# (results/operator_check.md); the variant uses SPP's own forecast through the end of 2025.
+SWPP_REPLACED_DAYS = ("2025-05-07", "2025-12-31")
+
+
+def lead_by_month(
+    forecast: pd.Series, demand: pd.Series, month: pd.Series, shifts: tuple[int, ...] = (-1, 0, 1)
+) -> pd.DataFrame:
+    """Per month: MAPE (%) of `forecast` against `demand` with the forecast moved k hours later,
+    on the hours where demand and every moved forecast are > 0, and `best`, the k with the
+    lowest. The three series share one index of UTC hour ends."""
+    forecasts = pd.DataFrame({k: moved(forecast, forecast.index, k) for k in shifts})
+    ok = demand.gt(0) & forecasts.gt(0).all(axis=1)
+    ape = 100 * forecasts[ok].sub(demand[ok], axis=0).abs().div(demand[ok], axis=0)
+    table = ape.groupby(month[ok]).mean()
+    return table.assign(best=table.idxmin(axis=1))
+
+
+def charging_fit(gap: pd.Series, storage: pd.Series) -> dict[str, float]:
+    """Least-squares fit of gap = a + b × charging + c × discharging (MW) over the hours with
+    both, where `storage` is net generation from storage (below 0 while charging), and R²."""
+    both = gap.notna() & storage.notna()
+    y, net = gap[both].to_numpy(), storage[both].to_numpy()
+    x = np.column_stack([np.ones(len(y)), np.clip(-net, 0, None), np.clip(net, 0, None)])
+    coef = np.linalg.lstsq(x, y, rcond=None)[0]
+    r2 = 1 - ((y - x @ coef) ** 2).sum() / ((y - y.mean()) ** 2).sum()
+    return {
+        "hours": len(y),
+        "intercept": coef[0],
+        "charging": coef[1],
+        "discharging": coef[2],
+        "r2": r2,
+    }
+
+
+def demand_moved_back(
+    hourly: pd.DataFrame, ba: str, spans: tuple[tuple[pd.Timestamp, pd.Timestamp], ...]
+) -> pd.DataFrame:
+    """`hourly` with the BA's demand for the UTC hour ends `first` to `last` of each span taken
+    from one hour later, for spans where EIA-930 reports each hour's demand an hour late. EIA's
+    imputed and adjusted demand travel with it. The value for a span's last hour is not in the
+    data, so it is NaN."""
+    own = hourly["ba"].eq(ba)
+    table = hourly[own].set_index("utc")
+    corrected = hourly.copy()
+    for first, last in spans:
+        rows = own & hourly["utc"].between(first, last)
+        later = hourly.loc[rows, "utc"] + HOUR
+        for column in ("demand", "demand_imputed", "demand_adjusted"):
+            values = table[column].reindex(later).to_numpy()
+            corrected.loc[rows, column] = np.where(later.eq(last + HOUR), np.nan, values)
+    return corrected
+
+
+def forecast_replaced(
+    hourly: pd.DataFrame, ba: str, replacement: pd.Series, first: pd.Timestamp, last: pd.Timestamp
+) -> pd.DataFrame:
+    """`hourly` with the BA's forecast for the UTC hour ends `first` to `last` replaced by
+    `replacement` (by UTC hour end); hours it lacks become NaN."""
+    rows = hourly["ba"].eq(ba) & hourly["utc"].between(first, last)
+    corrected = hourly.copy()
+    corrected.loc[rows, "forecast"] = replacement.reindex(hourly.loc[rows, "utc"]).to_numpy()
+    return corrected
