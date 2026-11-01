@@ -18,6 +18,7 @@ from grid_audit.audit import (
     marked,
     marked_year,
     naive_source,
+    national_lines,
     panel_bas,
     read_load_shedding,
     read_weather_events,
@@ -352,3 +353,37 @@ def test_charging_counts() -> None:
         "without_recent": 1,  # the 2025 hour
         "mean_final": 100.0,
     }
+
+
+def test_national_lines() -> None:
+    # Two runs on a 50-BA panel over 2016-2017. The lines keep each run's yearly national figure
+    # as given; the caption repeats each trend at three decimals, as the robustness table does.
+    years = pd.Index([2016, 2017], name="year")
+    robustness = {
+        "Main": {
+            "national_by_year": pd.Series([3.5, 4.0], index=years),
+            "national_slope": 0.0614,
+            "national_p": 0.0491,
+            "national_verdict": "worse",
+            "panel": 50,
+        },
+        "All corrections": {
+            "national_by_year": pd.Series([3.25, 3.0], index=years),
+            "national_slope": 0.0087,
+            "national_p": 0.7213,
+            "national_verdict": "no clear trend",
+            "panel": 50,
+        },
+    }
+    data, caption = national_lines(robustness)
+    assert list(data.columns) == ["As published", "All corrections"]
+    assert data.loc[2017].tolist() == [4.0, 3.0]
+    assert caption == (
+        "The 50-BA panel (BAs eligible in every year 2016–2025); error is Σ|e| / Σ demand over "
+        "all of them.\nTrend: as published 0.061 pp/yr (p = 0.049, worse); all corrections "
+        "0.009 pp/yr (p = 0.721, no clear trend)."
+    )
+    # Panels of different sizes would make one caption wrong for one of the lines.
+    robustness["All corrections"]["panel"] = 49
+    with pytest.raises(RuntimeError, match="panels differ"):
+        national_lines(robustness)

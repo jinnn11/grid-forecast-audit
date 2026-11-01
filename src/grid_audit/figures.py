@@ -164,6 +164,53 @@ def q2_lines(panel: pd.DataFrame, by_year: pd.DataFrame) -> None:
         save(fig, data, "q2_mape_by_year")
 
 
+def national_by_year(lines: pd.DataFrame, caption: str) -> None:
+    """Headline: the panel's national figure (Σ|e| / Σ demand) per year, one line per column of
+    `lines` (years as the index), coloured in column order. Linear scale from 0, so the change
+    reads against the level; each line is labelled at its last year."""
+    colors = [BLUE, ORANGE]
+    if len(lines.columns) > len(colors):
+        raise ValueError(f"at most {len(colors)} lines, got {len(lines.columns)}")
+    with plt.rc_context(STYLE):
+        fig, ax = plt.subplots(figsize=(7.5, 4.6))
+        for name, color in zip(lines.columns, colors, strict=False):
+            ax.plot(
+                lines.index,
+                lines[name],
+                color=color,
+                linewidth=2,
+                solid_capstyle="round",
+                solid_joinstyle="round",
+                marker="o",
+                markersize=5,
+                markeredgecolor=SURFACE,
+                markeredgewidth=1.5,
+                zorder=3,
+                label=name,
+            )
+            last = lines.index[-1]
+            ax.annotate(
+                f"{name} {lines.loc[last, name]:.2f}%",
+                (last, lines.loc[last, name]),
+                xytext=(8, 0),
+                textcoords="offset points",
+                color=INK_2,
+                va="center",
+            )
+        ax.set_ylim(0, 1.15 * lines.max().max())
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}%"))
+        ax.grid(axis="y", which="major")
+        ax.set_axisbelow(True)
+        ax.set_xticks(list(lines.index))
+        ax.set_ylabel("National error, Σ|e| / Σ demand")
+        # Top down: title, caption, legend, then the plot.
+        title = "National day-ahead forecast error by year, as published and corrected"
+        ax.set_title(title, pad=58)
+        ax.text(0, 1.09, caption, transform=ax.transAxes, color=INK_2, va="bottom")
+        ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, borderaxespad=0.2)
+        save(fig, lines, "national_by_year")
+
+
 def q3_heatmap(grid: pd.DataFrame) -> None:
     """Median MAPE across BAs by season (rows) and local hour ending (columns)."""
     with plt.rc_context(STYLE):

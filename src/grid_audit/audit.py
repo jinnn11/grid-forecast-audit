@@ -282,6 +282,7 @@ def robustness_row(run: Run) -> dict[str, object]:
         "national_slope": national.slope,
         "national_p": national.p,
         "national_verdict": national.verdict,
+        "national_by_year": by_year["national"],
         "median_ranks": year_ranks(by_year["median_mape"]),
         "national_ranks": year_ranks(by_year["national"]),
         "worse": int(verdicts.get("worse", 0)),
@@ -1179,6 +1180,26 @@ def render_audit(r: Results, hourly: pd.DataFrame) -> str:
     return "\n".join(parts)
 
 
+def national_lines(robustness: dict[str, dict[str, object]]) -> tuple[pd.DataFrame, str]:
+    """The headline figure's data and caption: the panel's national figure per year as published
+    (the main run) and with all corrections, and each line's trend as in the robustness table."""
+    rows = {"As published": robustness["Main"], "All corrections": robustness["All corrections"]}
+    data = pd.DataFrame({label: row["national_by_year"] for label, row in rows.items()})
+    trends = "; ".join(
+        f"{label.lower()} {row['national_slope']:.3f} pp/yr (p = {row['national_p']:.3f}, "
+        f"{row['national_verdict']})"
+        for label, row in rows.items()
+    )
+    panels = {row["panel"] for row in rows.values()}
+    if len(panels) != 1:
+        raise RuntimeError(f"the two runs' panels differ in size: {sorted(panels)}")
+    caption = (
+        f"The {panels.pop()}-BA panel (BAs eligible in every year {YEARS[0]}–{YEARS[-1]}); "
+        f"error is Σ|e| / Σ demand over all of them.\nTrend: {trends}."
+    )
+    return data, caption
+
+
 def write_figures(r: Results) -> None:
     final = r.main.yearly.xs(YEAR, level="year")
     figures.q1_dot_plot(final, final["mape"].median(), pooled_wape(final), r.top, YEAR)
@@ -1186,6 +1207,7 @@ def write_figures(r: Results) -> None:
     figures.q2_lines(panel, r.panel_by_year)
     figures.q3_heatmap(r.season_hour)
     figures.q4_scatter(r.q4, r.top, r.rho, r.rho_p, BASE_YEAR, YEAR)
+    figures.national_by_year(*national_lines(r.robustness))
 
 
 def all_runs(
