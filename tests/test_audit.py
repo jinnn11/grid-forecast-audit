@@ -7,6 +7,7 @@ from grid_audit.audit import (
     Run,
     audit_run,
     ba_trends,
+    charging_counts,
     cut_demand,
     demand_growth,
     event_effects,
@@ -335,3 +336,19 @@ def test_verified_corrections() -> None:
     assert corrected["demand"].tolist()[:2] == [2.0, 3.0] and pd.isna(corrected["demand"][2])
     assert corrected["forecast"].tolist() == [1.0, 1.0, 1.0, 90.0]
     assert counts == {"ciso_moved": 3, "ciso_blanked": 1, "swpp_replaced": 1, "swpp_missing": 0}
+
+
+def test_charging_counts() -> None:
+    times = ["2018-06-30 12:00", "2018-07-01 08:00", "2025-06-01 10:00", "2025-06-01 11:00"]
+    utc = pd.to_datetime([*times, "2025-06-01 10:00"], utc=True)
+    hourly = pd.DataFrame({"ba": ["CISO"] * 4 + ["BANC"], "utc": utc})
+    local = pd.DataFrame({"year": [2018, 2018, 2025, 2025, 2025]})
+    charge = pd.Series([5.0, 0.0, 100.0], index=utc[:3])
+    # June 2018 is before fuel types and BANC is not CISO. Of the three CISO hours left, two
+    # have a value (0 and 100) and 2025-06-01 11:00 has none; 2025's mean is 100.
+    assert charging_counts(hourly, local, charge) == {
+        "with": 2,
+        "without": 1,
+        "without_recent": 1,  # the 2025 hour
+        "mean_final": 100.0,
+    }

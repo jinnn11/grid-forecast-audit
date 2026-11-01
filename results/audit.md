@@ -78,7 +78,7 @@ Per BA: yearly MAPE over its eligible years, for the 52 BAs with at least 8. Slo
 Across BAs: the 50-BA panel eligible in every year 2016–2025.
 
 - Median MAPE across the panel: slope 0.010 points per year, Mann–Kendall S = 9, p = 0.474 (no clear trend).
-- National figure on the panel: slope 0.061 points per year, S = 23, p = 0.049 (worse). The verdict sits close to the 0.05 bar; the Robustness section shows it for every variant. With the two verified data corrections (CISO's late demand, SWPP's forecast) it is no clear trend (p = 0.210).
+- National figure on the panel: slope 0.061 points per year, S = 23, p = 0.049 (worse). The verdict sits close to the 0.05 bar; the Robustness section shows it for every variant. With the two verified data corrections (CISO's late demand, SWPP's forecast) it is no clear trend (p = 0.210); with CISO's battery charging also taken out of its demand, no clear trend (p = 0.721).
 - Among the ten panel years (1: the highest error), 2024 ranks 3 and 2025 ranks 1 on the panel median, and 2024 ranks 5 and 2025 ranks 1 on the national figure.
 
 | Year | Panel median MAPE (%) | Panel national WAPE (%) |
@@ -454,6 +454,8 @@ Each variant re-runs the whole audit with one change. Eligibility, the panel and
 | R2 with N = 12 | Only runs of 12 hours or more dropped | 4.16 | 4.24 | 0.010 | 0.061 | 0.049 (worse) | 11 / 10 | -0.004 | 19 |
 | Repeated forecasts dropped | R2b (forecast runs of 6 hours or more) applied | 4.16 | 4.23 | 0.010 | 0.061 | 0.074 (no clear trend) | 11 / 10 | 0.027 | 19 |
 | Verified corrections | CISO demand moved back 1 h where EIA-930 has it an hour late; SWPP forecast from 2025-05-07 replaced by SPP's own day-ahead forecast; all rules re-applied | 4.11 | 3.80 | 0.003 | 0.032 | 0.210 (no clear trend) | 11 / 10 | -0.045 | 18 |
+| CISO without charging | CISO's battery charging (from its other-fuel net generation, July 2018 on) taken out of its demand; all rules re-applied | 4.16 | 4.04 | 0.010 | 0.035 | 0.107 (no clear trend) | 10 / 10 | -0.017 | 18 |
+| All corrections | Verified corrections, then CISO's charging taken out of its demand; all rules re-applied | 3.93 | 3.58 | -0.009 | 0.009 | 0.721 (no clear trend) | 10 / 10 | -0.014 | 17 |
 
 Ranks: where 2024 / 2025 fall among the ten panel years, 1 being the highest error.
 
@@ -466,16 +468,30 @@ Ranks: where 2024 / 2025 fall among the ten panel years, 1 being the highest err
 | R2 with N = 12 | 53 | 50 | 52 | 49 | 4,582,454 | 3 / 1 | 5 / 1 |
 | Repeated forecasts dropped | 53 | 50 | 52 | 49 | 4,574,441 | 3 / 1 | 5 / 1 |
 | Verified corrections | 53 | 50 | 52 | 49 | 4,582,016 | 3 / 2 | 6 / 4 |
+| CISO without charging | 53 | 50 | 52 | 49 | 4,580,443 | 3 / 1 | 7 / 1 |
+| All corrections | 53 | 50 | 52 | 49 | 4,580,771 | 4 / 6 | 6 / 8 |
 
-### Verified corrections
+### Verified corrections and battery charging
 
-Requested by the user on 2026-10-30: the audit re-run with the two data errors the operator checks verified, and every rule re-applied. The main run stays as published.
+Requested by the user on 2026-10-30: the audit re-run with the data errors the operator checks verified, and with CISO's battery charging taken out of its demand, every rule re-applied each time. The main run stays as published.
 
-- CISO: demand moved back one hour in the late spans of `results/ciso_check.md` (UTC hour ends 2016-01-01 09:00 to 2016-09-12 21:00, 2022-06-14 08:00 to 2022-06-15 07:00, 2022-06-16 08:00 to 2025-12-02 23:00): 36,533 hours. The last hour of each span needs a value the data do not have, so the move leaves 3 more hours blank.
-- SWPP: the forecast for the local days 2025-05-07 to 2025-12-31 replaced by SPP's own day-ahead forecast (the 03:00 issue of the day before, as in `results/operator_check.md`): 5,737 hours, of which 0 lack SPP's value. Replacing is clean enough to use: SPP's files cover the hours, and before 7 May EIA's own SWPP forecast followed this series closely, though rarely exactly (it carries another issue).
-- **2025 ranks** among the ten panel years (panel median and national): 2 and 4, against 1 and 1 in the main run.
-- **National panel trend:** 0.032 pp/yr, p = 0.210 (no clear trend), against 0.061 pp/yr, p = 0.049 (worse).
-- **BAs losing to the naive forecast in 2025:** 18, against 19. No longer losing: SWPP; newly losing: none. Skill in 2025, main → corrected: CISO -0.78 → -0.49; SWPP -0.79 → 0.54.
+- CISO's late demand: moved back one hour in the late spans of `results/ciso_check.md` (UTC hour ends 2016-01-01 09:00 to 2016-09-12 21:00, 2022-06-14 08:00 to 2022-06-15 07:00, 2022-06-16 08:00 to 2025-12-02 23:00): 36,533 hours. The last hour of each span needs a value the data do not have, so the move leaves 3 more hours blank.
+- SWPP's forecast: for the local days 2025-05-07 to 2025-12-31 replaced by SPP's own day-ahead forecast (the 03:00 issue of the day before, as in `results/operator_check.md`): 5,737 hours, of which 0 lack SPP's value. Replacing is clean enough to use: SPP's files cover the hours, and before 7 May EIA's own SWPP forecast followed this series closely, though rarely exactly (it carries another issue). What changed on 7 May is not known.
+- CISO's charging: −(its other-fuel net generation) where that is below 0, which matches CAISO's own battery output (`results/ciso_check.md`), taken out of its demand in the same hour. In 2025 that column runs an hour late together with demand, so the same EIA hour holds both; this is taken to hold in every late span (see the CISO check for the evidence before 2025). "All corrections" moves both back. EIA-930 has fuel types from July 2018: 57,797 CISO hours in 2018–2025 have a value and 7,989 do not (kept as published): CISO left the column blank from October 2019 to August 2020, when batteries were small, and only 106 hours lack it from 2021 on. Mean charging taken out in 2025: 1,485 MW. "CISO without charging" applies only this correction; "All corrections" applies all three.
+
+|  | Main | Verified corrections | CISO without charging | All corrections |
+| :-- | --: | --: | --: | --: |
+| 2025 rank among the panel years, median / national | 1 / 1 | 2 / 4 | 1 / 1 | 6 / 8 |
+| National panel slope (pp/yr) | 0.061 | 0.032 | 0.035 | 0.009 |
+| National panel trend p (verdict) | 0.049 (worse) | 0.210 (no clear trend) | 0.107 (no clear trend) | 0.721 (no clear trend) |
+| BAs losing to the naive forecast in 2025 | 19 | 18 | 18 | 17 |
+| CISO MAPE 2025 (%) | 8.28 | 7.00 | 4.33 | 2.35 |
+| CISO skill 2025 | -0.78 | -0.49 | 0.16 | 0.56 |
+| CISO MAPE trend 2016–2025, pp/yr (verdict) | 0.60 (worse) | 0.39 (worse) | 0.19 (no clear trend) | 0.05 (no clear trend) |
+
+Changes in who loses to the naive forecast in 2025, against the main run: Verified corrections: no longer losing SWPP; newly losing none; CISO without charging: no longer losing CISO; newly losing none; All corrections: no longer losing CISO, SWPP; newly losing none.
+
+Exploratory, not in the pre-registered plan: whether any other BA that reports batteries has a forecast gap that tracks charging as CISO's does (`results/battery_check.md`; none does).
 
 ## Notes
 

@@ -11,22 +11,28 @@ from grid_audit.operators import (
     alignment,
     caiso_series,
     charging_fit,
+    charging_removed,
     demand_moved_back,
     forecast_replaced,
     lead_by_month,
     monthly,
     moved,
+    moved_back,
     oasis_file,
     oasis_name,
     oasis_url,
     oasis_window,
     offset_runs,
+    outlook_name,
+    outlook_url,
     ramp_match,
     ramp_runs,
     read_oasis,
+    read_outlook,
     read_spp,
     score,
     score_table,
+    series_match,
     source_url,
     spp_issue,
     spp_issues,
@@ -465,3 +471,80 @@ def test_ramp_runs_by_day() -> None:
     runs = ramp_runs(eia, operator, day.set_axis(index))
     assert runs["shift"].tolist() == [1, 0]
     assert runs["days"].tolist() == [1, 1]
+
+
+def test_charging_removed() -> None:
+    hourly, t = hourly_two_bas()
+    charge = pd.Series([1.0, 2.0, NAN, 4.0, 0.0], index=t)
+    corrected = charging_removed(hourly, "A", charge)
+    # 10 - 1, 20 - 2, 30 (no charging value, kept), 40 - 4, 50 - 0.
+    assert corrected.loc[corrected["ba"].eq("A"), "demand"].tolist() == [
+        9.0,
+        18.0,
+        30.0,
+        36.0,
+        50.0,
+    ]
+    assert corrected[corrected["ba"].eq("B")].equals(hourly[hourly["ba"].eq("B")])
+
+
+def test_moved_back() -> None:
+    _, t = hourly_two_bas()
+    series = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0], index=t)
+    # Span hours 2-4 take hours 3-5's values; hour 4, the span's last, is blank.
+    values = moved_back(series, ((t[1], t[3]),)).tolist()
+    assert values[:3] == [1.0, 3.0, 4.0] and pd.isna(values[3]) and values[4] == 5.0
+    assert series.tolist() == [1.0, 2.0, 3.0, 4.0, 5.0]  # the input is unchanged
+
+
+def test_series_match() -> None:
+    index = pd.date_range("2025-01-01 01:00", periods=4, freq="h", tz="UTC")
+    operator = pd.Series([-100.0, 50.0, 200.0, -50.0], index=index)
+    eia = 2 * operator  # twice the operator's values, on time
+    table = series_match(eia, operator, shifts=(0, 1))
+    # On time: 4 hours, correlation 1, slope 2, and |eia - operator| = |operator| on average:
+    # (100 + 50 + 200 + 50) / 4 = 100.
+    assert table.loc[0, "hours"] == 4 and table.loc[0, "corr"] == pytest.approx(1.0)
+    assert table.loc[0, "slope"] == pytest.approx(2.0)
+    assert table.loc[0, "mean_abs_diff"] == pytest.approx(100.0)
+    # Moved +1 h: 3 hours, EIA (100, 400, -100) against (-100, 50, 200).
+    assert table.loc[1, "hours"] == 3 and table.loc[1, "corr"] < 0
+
+
+def outlook_text(blocks: list[tuple[int, str]], partial: int | None = None) -> str:
+    """A fuel-mix file: 12 five-minute readings per (hour, value) block; then, optionally,
+    three readings of the `partial` hour."""
+    lines = ["Time,Solar,Batteries"]
+    for hour, value in blocks:
+        lines += [f"{hour:02d}:{minute:02d},0,{value}" for minute in range(0, 60, 5)]
+    if partial is not None:
+        lines += [f"{partial:02d}:{minute:02d},0,99" for minute in (0, 5, 10)]
+    return "\n".join(lines)
+
+
+def test_read_outlook_on_the_clock_changes() -> None:
+    # 2025-11-02: CAISO lists 01:00 once, so it is ambiguous and left out. 00:00 PDT starts at
+    # 07:00 UTC, so hour end 08:00 -> 10; 09:00 (01:00 PDT) and 10:00 (01:00 PST) are empty;
+    # 11:00 (02:00 PST) -> 40; 12:00 has 3 of 12 readings -> NaN.
+    autumn = read_outlook(
+        io.StringIO(outlook_text([(0, "10"), (1, "20"), (2, "40")], partial=3)),
+        pd.Timestamp("2025-11-02"),
+    )
+    assert autumn.index.equals(pd.date_range("2025-11-02 08:00", periods=5, freq="h", tz="UTC"))
+    values = autumn.tolist()
+    assert values[0] == 10.0 and pd.isna(values[1]) and pd.isna(values[2])
+    assert values[3] == 40.0 and pd.isna(values[4])
+    # 2025-03-09: 02:00 does not exist and CAISO lists it blank. 01:00 PST is 09:00 UTC and
+    # 03:00 PDT is 10:00 UTC, so hour ends 10:00 -> 5 and 11:00 -> 7.
+    spring = read_outlook(
+        io.StringIO(outlook_text([(1, "5"), (2, ""), (3, "7")])), pd.Timestamp("2025-03-09")
+    )
+    assert spring.index.equals(pd.date_range("2025-03-09 10:00", periods=2, freq="h", tz="UTC"))
+    assert spring.tolist() == [5.0, 7.0]
+
+
+def test_outlook_name_and_url() -> None:
+    day = pd.Timestamp("2025-03-09")
+    assert outlook_name(day) == "CAISO_OUTLOOK_fuelsource_20250309.csv"
+    assert outlook_url(day) == "https://www.caiso.com/outlook/history/20250309/fuelsource.csv"
+    assert source_url(Path(outlook_name(day))) == outlook_url(day)

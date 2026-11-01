@@ -11,7 +11,7 @@ import time
 from grid_audit.download import fetch_url
 from grid_audit.operators import planned_files, read_oasis
 
-PAUSE_SECONDS = {"caiso": 10.0, "spp": 1.5}  # OASIS allows about one query per 5 seconds
+PAUSE_SECONDS = {"caiso": 10.0, "spp": 1.5, "caiso_outlook": 1.5}  # OASIS: ~1 query per 5 s
 OASIS_RETRY_WAITS = (60.0, 180.0)  # seconds before each retry of a refused OASIS query
 
 

@@ -31,9 +31,19 @@ CAISO_SAMPLE_MONTHS = pd.PeriodIndex([f"{year}-07" for year in range(2016, 2025)
 # forecast-against-demand timing, day by day, places the two switches: 2016-09-12/13 and
 # 2022-06-17 (the 2025-12-02/03 switch it also shows was already confirmed with CAISO's data).
 CAISO_PINNED_MONTHS = pd.PeriodIndex(["2016-01", "2016-09", "2022-06"], freq="M")
-CAISO_HISTORY_MONTHS = CAISO_SAMPLE_MONTHS.union(CAISO_PINNED_MONTHS)
+# The short spells EIA's own check flags outside the late spans (user, 2026-10-30: only the months
+# involved); July 2020 is already in the sample.
+CAISO_SPELL_MONTHS = pd.PeriodIndex(["2020-05", "2021-05"], freq="M")
+CAISO_HISTORY_MONTHS = CAISO_SAMPLE_MONTHS.union(CAISO_PINNED_MONTHS).union(CAISO_SPELL_MONTHS)
 PACIFIC = "America/Los_Angeles"  # OASIS counts its 31-day limit in Pacific trading days
 OASIS_STAMP = "%Y%m%dT%H%M"
+
+# CAISO's own battery output for 2025 (user, 2026-10-30), to check what CISO reports under
+# EIA-930's "Other Fuel Sources": Today's Outlook daily fuel-mix files, MW every 5 minutes on the
+# Pacific clock. "Batteries" is the fleet's net output, below 0 while charging.
+OUTLOOK_URL = "https://www.caiso.com/outlook/history/{day:%Y%m%d}/fuelsource.csv"
+OUTLOOK_DAYS = pd.date_range("2025-01-01", "2025-12-31", freq="D")
+OUTLOOK_MIN_READINGS = 10  # of 12 five-minute readings, for an hourly mean
 
 # SPP "MTLF vs Actual": one file per issue hour (named on SPP's Central clock), with the mid-term
 # load forecast for the next days and the averaged actual load for the past hours. SPP's
@@ -99,6 +109,30 @@ def spp_issue(day: pd.Timestamp) -> pd.Timestamp:
     return day + pd.Timedelta(hours=SPP_ISSUE_HOUR + springs_forward)
 
 
+def outlook_name(day: pd.Timestamp) -> str:
+    """Cache name for one day's Today's Outlook fuel mix (CAISO names every day fuelsource.csv)."""
+    return f"CAISO_OUTLOOK_fuelsource_{day:%Y%m%d}.csv"
+
+
+def outlook_url(day: pd.Timestamp) -> str:
+    return OUTLOOK_URL.format(day=day)
+
+
+def read_outlook(source: Path | io.StringIO, day: pd.Timestamp, column: str = "Batteries"):
+    """`column` (MW) from one Today's Outlook fuel-mix file, by UTC hour end: the mean of the
+    hour's 5-minute readings (stamped at their start on the Pacific clock of `day`), NaN with
+    fewer than OUTLOOK_MIN_READINGS. Every file has 288 rows: on the spring change the missing
+    hour is listed blank; on the autumn change the repeated hour is listed once, so which of the
+    two it is is unknown and it is left out."""
+    table = pd.read_csv(source)
+    local = pd.to_datetime(f"{day:%Y-%m-%d} " + table["Time"], format="%Y-%m-%d %H:%M")
+    utc = local.dt.tz_localize(PACIFIC, ambiguous="NaT", nonexistent="NaT").dt.tz_convert("UTC")
+    readings = pd.Series(table[column].astype(float).to_numpy(), index=pd.DatetimeIndex(utc))
+    readings = readings[readings.index.notna()]
+    hours = readings.resample("h", closed="left", label="right")
+    return hours.mean().where(hours.count() >= OUTLOOK_MIN_READINGS).rename_axis("utc")
+
+
 def spp_name(issue: pd.Timestamp) -> str:
     return f"OP-MTLF-{issue:%Y%m%d%H}00.csv"
 
@@ -114,6 +148,8 @@ def source_url(path: Path) -> str:
         run, _, window = path.stem.removeprefix("CAISO_SLD_FCST_").split("_")
         start, end = (pd.to_datetime(t, format=OASIS_STAMP, utc=True) for t in window.split("-"))
         return oasis_url(run, start, end)
+    if path.name.startswith("CAISO_OUTLOOK_fuelsource_"):
+        return outlook_url(pd.to_datetime(path.stem.rsplit("_", 1)[1], format="%Y%m%d"))
     if path.name.startswith("OP-MTLF-"):
         issue = pd.to_datetime(path.stem.removeprefix("OP-MTLF-"), format="%Y%m%d%H%M")
         return spp_url(issue)
@@ -125,6 +161,9 @@ def planned_files(directory: Path = OPERATORS_DIR) -> list[tuple[str, Path]]:
     months = CAISO_HISTORY_MONTHS.union(CAISO_MONTHS)
     files = [oasis_file(run, month, directory / "caiso") for run in CAISO_RUNS for month in months]
     files += [(spp_url(issue), directory / "spp" / spp_name(issue)) for issue in spp_issues()]
+    files += [
+        (outlook_url(day), directory / "caiso_outlook" / outlook_name(day)) for day in OUTLOOK_DAYS
+    ]
     return files
 
 
@@ -369,6 +408,27 @@ def lead_by_month(
     return table.assign(best=table.idxmin(axis=1))
 
 
+def series_match(
+    eia: pd.Series, operator: pd.Series, shifts: tuple[int, ...] = (-1, 0, 1)
+) -> pd.DataFrame:
+    """For each shift k (the operator's series moved k hours later): hours with both values,
+    their correlation, the mean absolute difference (MW) and the least-squares slope of EIA's
+    value on the operator's. For series near 0 on average, such as net storage, where a gap as
+    a percent of the mean means nothing."""
+    rows = {}
+    for k in shifts:
+        other = moved(operator, eia.index, k)
+        both = eia.notna() & other.notna()
+        x, y = other[both], eia[both]
+        rows[k] = {
+            "hours": int(both.sum()),
+            "corr": x.corr(y),
+            "mean_abs_diff": (y - x).abs().mean(),
+            "slope": ((x - x.mean()) * (y - y.mean())).sum() / ((x - x.mean()) ** 2).sum(),
+        }
+    return pd.DataFrame.from_dict(rows, orient="index").rename_axis("shift")
+
+
 def charging_fit(gap: pd.Series, storage: pd.Series) -> dict[str, float]:
     """Least-squares fit of gap = a + b × charging + c × discharging (MW) over the hours with
     both, where `storage` is net generation from storage (below 0 while charging), and R²."""
@@ -376,7 +436,8 @@ def charging_fit(gap: pd.Series, storage: pd.Series) -> dict[str, float]:
     y, net = gap[both].to_numpy(), storage[both].to_numpy()
     x = np.column_stack([np.ones(len(y)), np.clip(-net, 0, None), np.clip(net, 0, None)])
     coef = np.linalg.lstsq(x, y, rcond=None)[0]
-    r2 = 1 - ((y - x @ coef) ** 2).sum() / ((y - y.mean()) ** 2).sum()
+    spread = ((y - y.mean()) ** 2).sum()
+    r2 = 1 - ((y - x @ coef) ** 2).sum() / spread if spread > 0 else float("nan")
     return {
         "hours": len(y),
         "intercept": coef[0],
@@ -402,6 +463,30 @@ def demand_moved_back(
         for column in ("demand", "demand_imputed", "demand_adjusted"):
             values = table[column].reindex(later).to_numpy()
             corrected.loc[rows, column] = np.where(later.eq(last + HOUR), np.nan, values)
+    return corrected
+
+
+def moved_back(
+    series: pd.Series, spans: tuple[tuple[pd.Timestamp, pd.Timestamp], ...]
+) -> pd.Series:
+    """`series` (by UTC hour end) with its values for the hour ends `first` to `last` of each
+    span taken from one hour later, as demand_moved_back does for demand; NaN at each span's
+    last hour."""
+    moved_series = series.copy()
+    for first, last in spans:
+        inside = series.index[(series.index >= first) & (series.index <= last)]
+        values = series.reindex(inside + HOUR).to_numpy()
+        moved_series[inside] = np.where(inside == last, np.nan, values)
+    return moved_series
+
+
+def charging_removed(hourly: pd.DataFrame, ba: str, charge: pd.Series) -> pd.DataFrame:
+    """`hourly` with the BA's charging (MW by UTC hour end, on the same timing as its demand)
+    taken out of its demand. Hours without a charging value keep their demand."""
+    rows = hourly["ba"].eq(ba)
+    taken = charge.reindex(hourly.loc[rows, "utc"]).fillna(0).to_numpy()
+    corrected = hourly.copy()
+    corrected.loc[rows, "demand"] = hourly.loc[rows, "demand"].to_numpy() - taken
     return corrected
 
 

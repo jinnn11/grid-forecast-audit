@@ -294,9 +294,14 @@ def files_section(files: pd.DataFrame, revised: int) -> list[str]:
         "(OASIS counts its 31-day limit in Pacific days; the first five files used 08:00 UTC "
         "and are kept). OASIS names its files by request time, so they are cached as "
         "`CAISO_SLD_FCST_<run>_<month>_<UTC window>.zip`. No account, login or terms were "
-        "needed. On 2026-10-30 a further 13 months were fetched to date CISO's one-hour lag "
-        "(July 2016–2024, then Jan 2016, Sep 2016 and Jun 2022; `results/ciso_check.md`); "
-        "they are listed here but not used below.",
+        "needed. On 2026-10-30 a further 15 months were fetched to date CISO's one-hour lag "
+        "(July 2016–2024, then Jan 2016, Sep 2016 and Jun 2022, then May 2020 and May 2021 for "
+        "the short spells; `results/ciso_check.md`); they are listed here but not used below.",
+        "- CAISO Today's Outlook (`CAISO_OUTLOOK`), approved on 2026-10-30 for 2025 only: the "
+        "daily fuel-mix files, whose `Batteries` column is CAISO's own battery output, used in "
+        "`results/ciso_check.md` to check CISO's EIA-930 storage column. Public, no account, "
+        "login or terms. Each day's file is called `fuelsource.csv`, so they are cached as "
+        "`CAISO_OUTLOOK_fuelsource_<date>.csv`.",
         "- SPP Marketplace portal, folder `mtlf-vs-actual`: one file per issue hour with the "
         "mid-term load forecast (MTLF) and the averaged actual load. No account, login or terms "
         "were needed. To find which issue is SPP's day-ahead forecast, all 24 issues of "

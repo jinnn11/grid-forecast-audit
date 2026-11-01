@@ -6,10 +6,11 @@ Follow-ups to `results/operator_check.md`, approved by the user on 2026-10-30: C
 
 - **EIA-930 reports CISO's demand an hour late in two spans: from before 2016 to 2016-09-12, and from 2022-06-14 (steadily from 2022-06-16) to 2025-12-02.** In every checked month EIA's forecast equals CAISO's day-ahead forecast as published; the lead is in EIA's demand, as in 2025.
   - Audit years with the lead: 2016 (to 2016-09-12), 2022 (from mid-June), 2023, 2024 and 2025 (to 2 December). The audit's own Q5 table shows it only for 2023–2025, the CISO years it checked.
-  - Samples (July of 2016–2024): late in 2016, 2022, 2023, 2024; on time in the others. The switches were pinned with Sep 2016 and Jun 2022, and the start of the audit years with Jan 2016.
-- **Most of CAISO's own forecast gap is battery charging.** In 2025 CAISO's forecast is 6.9% below its actual load (all hours); the hourly gap follows charging almost MW for MW (b = 0.90, R² = 0.79) and not discharging (c = -0.08). Against actual load less charging the bias falls to -1.1% in 2025 and -1.9% in Jan–Jun 2026 (from -6.9% and -9.6%), the 2025 MAPE to 3.40% (from 7.31%), and CAISO's forecast beats the naive forecast (skill 0.40, from -0.51). In the sampled months before 2021, with little storage, the bias was within ±1.1%.
-  - The rest, about 523 MW in every hour, is not explained here. One candidate is non-dispatchable pump load, which the forecast leaves out (see the documentation below); whether the actual load includes it is not documented, and EIA-930 has no CISO pumping series, so it is not tested.
-  - So the actual-load series counts charging as load and the day-ahead forecast does not (see the documentation below). EIA-930's CISO demand equals CAISO's actual load and its forecast equals CAISO's day-ahead forecast, so the audit's CISO error carries the same mismatch. The audit is unchanged; this is reported, not corrected.
+  - Samples (July of 2016–2024): late in 2016, 2022, 2023, 2024; on time in the others. The switches were pinned with Sep 2016 and Jun 2022, and the start of the audit years with Jan 2016. The short 2020–2021 spells that EIA's own check flags are on time in CAISO's data (May 2020, July 2020, May 2021).
+- **CISO reports its batteries under EIA-930's `Other Fuel Sources`.** EIA's documentation does not say so, but against CAISO's own 2025 battery output the column matches at correlation 0.999 (EIA's values about 92% of CAISO's) once moved back an hour: it runs an hour late together with CISO's demand through 2025-12-02, and on time after. Before 2025 its timing is checked only indirectly (see below).
+- **Most of CAISO's own forecast gap is battery charging.** In 2025 CAISO's forecast is 6.9% below its actual load (all hours). With CAISO's own battery data, the hourly gap follows charging almost MW for MW (b = 0.90, R² = 0.91) and not discharging (c = -0.06). Against actual load less charging the bias is -0.6% (from -6.9%), MAPE 2.45% (from 7.31%), and CAISO's forecast beats the naive forecast (skill 0.56, from -0.51). With EIA's column instead: bias -1.1% in 2025 and -1.9% in Jan–Jun 2026 (from -9.6%), MAPE 2.45%. In the sampled months before 2021, with little storage, the bias was within ±1.1%.
+  - The rest, about 377 MW in every hour, is not explained here. One candidate is non-dispatchable pump load, which the forecast leaves out (see the documentation below); whether the actual load includes it is not documented, and EIA-930 has no CISO pumping series, so it is not tested.
+  - So the actual-load series counts charging as load and the day-ahead forecast does not (see the documentation below). EIA-930's CISO demand equals CAISO's actual load and its forecast equals CAISO's day-ahead forecast, so the audit's CISO error carries the same mismatch. The main run is unchanged; the audit's robustness section takes charging out in two variants.
 
 ## 1. When EIA-930's CISO demand runs an hour late
 
@@ -45,7 +46,9 @@ Per month: whether EIA's forecast equals CAISO's day-ahead forecast as published
 | 2017-07 | sample | 100.0 | 0.38 / 4.43 | 0.999 / 0.915 | 0 / 31 / 0 |
 | 2018-07 | sample | 100.0 | 1.24 / 3.84 | 0.992 / 0.923 | 0 / 27 / 4 |
 | 2019-07 | sample | 100.0 | 1.99 / 1.92 | 0.986 / 0.970 | 0 / 31 / 0 |
+| 2020-05 | spell check | 100.0 | 1.54 / 2.35 | 0.990 / 0.933 | 0 / 31 / 0 |
 | 2020-07 | sample | 100.0 | 1.54 / 2.64 | 0.991 / 0.956 | 0 / 31 / 0 |
+| 2021-05 | spell check | 100.0 | 1.40 / 2.41 | 0.990 / 0.906 | 0 / 31 / 0 |
 | 2021-07 | sample | 100.0 | 1.32 / 2.41 | 0.992 / 0.935 | 0 / 31 / 0 |
 | 2022-06 | pin-down | 100.0 | 3.34 / 1.73 | 0.904 / 0.961 | 16 / 14 / 0 |
 | 2022-07 | sample | 100.0 | 4.66 / 1.24 | 0.853 / 0.993 | 31 / 0 / 0 |
@@ -80,7 +83,7 @@ From the checks above, EIA-930's CISO demand is CAISO's actual load one hour lat
 | 2022-06-14 08:00 | 2022-06-14 01:00 PDT | 2022-06-15 07:00 | 2022-06-15 00:00 PDT |
 | 2022-06-16 08:00 | 2022-06-16 01:00 PDT | 2025-12-02 23:00 | 2025-12-02 15:00 PST |
 
-On the checked days wholly inside a span, 514 of 515 match best at +1 h; on those wholly outside, 392 of 396 match best as published. Exceptions: 2025-07-31 (inside, best +0 h); 2018-07-01 (outside, best -1 h); 2018-07-02 (outside, best -1 h); 2018-07-03 (outside, best -1 h); 2018-07-04 (outside, best -1 h). On 2018-07-01 to 04 CAISO's own actual load matches CAISO's own forecast best moved +1 h, while EIA's demand matches that forecast as published, so those days are an hour off in CAISO's OASIS series, not in EIA's.
+On the checked days wholly inside a span, 514 of 515 match best at +1 h; on those wholly outside, 454 of 458 match best as published. Exceptions: 2025-07-31 (inside, best +0 h); 2018-07-01 (outside, best -1 h); 2018-07-02 (outside, best -1 h); 2018-07-03 (outside, best -1 h); 2018-07-04 (outside, best -1 h). On 2018-07-01 to 04 CAISO's own actual load matches CAISO's own forecast best moved +1 h, while EIA's demand matches that forecast as published, so those days are an hour off in CAISO's OASIS series, not in EIA's.
 
 Hours either side of each switch (MW):
 
@@ -114,7 +117,7 @@ Hours either side of each switch (MW):
 
 EIA's demand is blank for the five hours after the 2016 switch. Just before the 2025 switch (2025-12-02 16:00–23:00 UTC) EIA's values match neither CAISO hour closely; they are counted as late, the nearer of the two.
 
-Outside the spans, EIA's own check finds short runs (two days or more) that fit best at +1 h: 2020-05-09 to 2020-05-10, 2020-05-23 to 2020-05-25, 2020-07-30 to 2020-07-31, 2021-05-29 to 2021-05-30. CAISO's data for them were not fetched, so they are neither confirmed nor corrected.
+Outside the spans, EIA's own check finds short runs (two days or more) that fit best at +1 h. Each was checked against CAISO's data for its month: 2020-05-09 to 2020-05-10 (0 of 2 days late in CAISO's data), 2020-05-23 to 2020-05-25 (0 of 3 days late in CAISO's data), 2020-07-30 to 2020-07-31 (0 of 2 days late in CAISO's data), 2021-05-29 to 2021-05-30 (0 of 2 days late in CAISO's data). On every one of those days EIA's demand matches CAISO's load as published, so the spells are noise in EIA's forecast-against-demand check, not late demand; the spans above are the whole timeline.
 
 ## 2. CAISO's forecast gap and battery charging
 
@@ -127,7 +130,7 @@ Outside the spans, EIA's own check finds short runs (two days or more) that fit 
 
 ### Storage in EIA-930 for CISO
 
-EIA-930's `Battery Storage` column (in the files from July 2024) is blank for CISO in every hour. CISO's `Other Fuel Sources` behaves like storage: below 0 in the middle of the day (charging) and above 0 in the evening (discharging), growing from tens of MW in 2019 to about ±10 GW in 2026. It is used here as CISO's storage, which is an inference from its pattern, not a label: charging is −other where other is below 0.
+EIA-930's `Battery Storage` column (in the files from July 2024) is blank for CISO in every hour. CISO's `Other Fuel Sources` behaves like storage: below 0 in the middle of the day (charging) and above 0 in the evening (discharging), growing from tens of MW in 2019 to about ±10 GW in 2026. It is used here as CISO's storage (charging is −other where other is below 0); the next subsection checks it against CAISO's own battery output.
 
 | Year | Hours with a battery value | Other fuel, 5th percentile (MW) | Other fuel, 95th percentile (MW) |
 | :-- | --: | --: | --: |
@@ -141,9 +144,82 @@ EIA-930's `Battery Storage` column (in the files from July 2024) is blank for CI
 | 2025 | 0 | -6,106 | 6,238 |
 | 2026 | 0 | -7,679 | 7,484 |
 
+### Is CISO's `Other Fuel Sources` its batteries?
+
+EIA's documentation does not say. EIA-930's instructions define `OTH` as "all other energy sources" and add: "In cases where there are three or fewer generators in an energy source category, and tariffs or other agreements require this information to be masked, use the “other” category (“OTH”) for this generation" (https://www.eia.gov/survey/form/eia_930/instructions.pdf). EIA's About page lists "Battery storage added as an energy source (beginning January 1, 2025)" (https://www.eia.gov/electricity/930-content/about.html). Neither, nor the reference tables, says what CISO reports under `OTH`.
+
+So the column was compared with CAISO's own battery output for 2025 (approved by the user on 2026-10-30): the `Batteries` column of CAISO's Today's Outlook daily fuel-mix files (https://www.caiso.com/outlook/history/YYYYMMDD/fuelsource.csv; public, no account, login or terms), MW every 5 minutes, averaged per hour. Both are net output, below 0 while charging. As published, EIA's values match CAISO's an hour earlier: the column runs an hour late, as CISO's demand does. Moved back in the same late spans as demand, it matches CAISO's series as published. Match: correlation at least 0.95. **It matches: CISO reports its batteries under `Other Fuel Sources`.** EIA's values are about 92% of CAISO's (slope).
+
+| EIA's other-fuel series | Hours | Correlation | Mean |difference| (MW) | Slope |
+| :-- | --: | --: | --: | --: |
+| as published, CAISO moved -1 h | 8,710 | 0.700 | 2,202 | 0.642 |
+| as published | 8,710 | 0.915 | 1,117 | 0.838 |
+| as published, CAISO moved +1 h | 8,710 | 0.989 | 372 | 0.906 |
+| moved back an hour in the late spans | 8,709 | 0.999 | 283 | 0.915 |
+
+By Pacific month, 2025, EIA's values moved back in the late spans (MW, means over all hours with both):
+
+| Month | EIA charging | CAISO charging | EIA discharging | CAISO discharging |
+| :-- | --: | --: | --: | --: |
+| Jan | 1,236 | 1,343 | 1,072 | 1,166 |
+| Feb | 1,266 | 1,368 | 1,106 | 1,194 |
+| Mar | 1,323 | 1,453 | 1,133 | 1,247 |
+| Apr | 1,433 | 1,578 | 1,262 | 1,384 |
+| May | 1,487 | 1,622 | 1,283 | 1,400 |
+| Jun | 1,575 | 1,729 | 1,367 | 1,497 |
+| Jul | 1,597 | 1,767 | 1,381 | 1,521 |
+| Aug | 1,649 | 1,806 | 1,403 | 1,536 |
+| Sep | 1,621 | 1,764 | 1,408 | 1,535 |
+| Oct | 1,705 | 1,867 | 1,466 | 1,607 |
+| Nov | 1,435 | 1,552 | 1,246 | 1,348 |
+| Dec | 1,473 | 1,585 | 1,277 | 1,372 |
+
+### When the other-fuel column runs late
+
+Per month: on time or an hour late. From 2025 directly, against CAISO's batteries. Before, only indirectly and only for the months of CAISO's load data: how well charging from EIA's value for the same hour, or for the hour after, fits CAISO's own actual − forecast gap (R²). The indirect test is weak where charging is small.
+
+| Month | Checked against | On time | An hour late | Verdict |
+| :-- | :-- | --: | --: | --: |
+| 2021-05 | CAISO's gap (R²) | 0.158 | 0.128 | on time |
+| 2021-07 | CAISO's gap (R²) | 0.257 | 0.173 | on time |
+| 2022-06 | CAISO's gap (R²) | 0.328 | 0.200 | on time |
+| 2022-07 | CAISO's gap (R²) | 0.421 | 0.326 | on time |
+| 2023-07 | CAISO's gap (R²) | 0.438 | 0.346 | on time |
+| 2024-07 | CAISO's gap (R²) | 0.547 | 0.671 | late |
+| 2025-01 | CAISO's batteries (correlation) | 0.895 | 0.999 | late |
+| 2025-02 | CAISO's batteries (correlation) | 0.900 | 0.999 | late |
+| 2025-03 | CAISO's batteries (correlation) | 0.904 | 0.999 | late |
+| 2025-04 | CAISO's batteries (correlation) | 0.901 | 0.997 | late |
+| 2025-05 | CAISO's batteries (correlation) | 0.911 | 0.999 | late |
+| 2025-06 | CAISO's batteries (correlation) | 0.916 | 0.999 | late |
+| 2025-07 | CAISO's batteries (correlation) | 0.916 | 0.999 | late |
+| 2025-08 | CAISO's batteries (correlation) | 0.913 | 0.999 | late |
+| 2025-09 | CAISO's batteries (correlation) | 0.910 | 0.999 | late |
+| 2025-10 | CAISO's batteries (correlation) | 0.907 | 0.999 | late |
+| 2025-11 | CAISO's batteries (correlation) | 0.900 | 0.999 | late |
+| 2025-12 | CAISO's batteries (correlation) | 0.993 | 0.878 | on time |
+| 2026-01 | CAISO's gap (R²) | 0.941 | 0.712 | on time |
+| 2026-02 | CAISO's gap (R²) | 0.936 | 0.724 | on time |
+| 2026-03 | CAISO's gap (R²) | 0.958 | 0.773 | on time |
+| 2026-04 | CAISO's gap (R²) | 0.959 | 0.782 | on time |
+| 2026-05 | CAISO's gap (R²) | 0.954 | 0.841 | on time |
+| 2026-06 | CAISO's gap (R²) | 0.958 | 0.820 | on time |
+
+The audit's charging variants take the column as late in every late span, as verified for 2025. Before 2025 that is not settled: the indirect test agrees for July 2024 but points the other way, weakly, for June–July 2022 and July 2023, and nothing covers August 2023 to June 2024. CISO's MAPE with demand moved back and charging taken out (all hours with values), with the column moved back too or left as published:
+
+| Year | Moved back (%) | As published (%) | Difference (pp) |
+| :-- | --: | --: | --: |
+| 2021 | 1.93 | 1.93 | 0.00 |
+| 2022 | 2.20 | 2.15 | -0.05 |
+| 2023 | 2.55 | 2.40 | -0.15 |
+| 2024 | 2.38 | 3.13 | 0.75 |
+| 2025 | 2.38 | 3.44 | 1.06 |
+
+In 2022 and 2023 the choice changes CISO's MAPE by at most 0.15 pp, so an hour's error in the charging there barely matters. In 2024 and 2025 leaving the column as published adds 0.75 and 1.06 pp, as expected where it is late.
+
 ### Does the gap track charging?
 
-CAISO's day-ahead forecast against its own actual load, per fetched month and for 2025 and Jan–Jun 2026 (all hours with both). Months before July 2018 have no fuel data, and CISO's other-fuel values are blank in July 2020. Fit: actual − forecast = a + b × charging + c × discharging (MW), least squares over the hours with storage data. Less charging: the actual load minus charging. Skill against each truth's value 24 hours earlier.
+CAISO's day-ahead forecast against its own actual load, per fetched month and for 2025 and Jan–Jun 2026 (all hours with both), with charging from EIA's other-fuel column (moved back where it is verified late, in 2025) and, last, from CAISO's own battery output. Months before July 2018 have no fuel data, and CISO's other-fuel values are blank in July 2020. Fit: actual − forecast = a + b × charging + c × discharging (MW), least squares over the hours with storage data. Less charging: the actual load minus charging. Skill against each truth's value 24 hours earlier.
 
 | Period | Hours | Bias (%) | Charging (% of load) | a (MW) | b | c | R² | Bias, less charging (%) | MAPE / less charging (%) | Skill / less charging |
 | :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
@@ -153,40 +229,43 @@ CAISO's day-ahead forecast against its own actual load, per fetched month and fo
 | Jul 2017 | 744 | 0.13 | – | – | – | – | – | – | 1.78 / – | 0.62 / – |
 | Jul 2018 | 744 | -0.99 | 0.03 | 350 | 1.59 | -3.09 | 0.01 | -0.96 | 2.80 / 2.78 | 0.46 / 0.46 |
 | Jul 2019 | 744 | 0.64 | 0.03 | -160 | 5.58 | -7.73 | 0.05 | 0.67 | 2.15 / 2.16 | 0.56 / 0.55 |
+| May 2020 | 744 | 0.14 | – | – | – | – | – | – | 2.35 / – | 0.60 / – |
 | Jul 2020 | 744 | 0.47 | – | – | – | – | – | – | 2.13 / – | 0.36 / – |
+| May 2021 | 744 | -1.36 | 0.28 | 245 | 1.95 | -0.97 | 0.16 | -1.08 | 2.24 / 2.08 | 0.62 / 0.65 |
 | Jul 2021 | 744 | -1.80 | 0.57 | 382 | 1.67 | -0.87 | 0.26 | -1.24 | 3.15 / 2.69 | 0.28 / 0.39 |
 | Jun 2022 | 720 | -3.05 | 0.76 | 740 | 1.30 | -0.48 | 0.33 | -2.30 | 3.98 / 3.24 | 0.37 / 0.50 |
 | Jul 2022 | 744 | -1.95 | 0.79 | 413 | 1.39 | -0.49 | 0.42 | -1.17 | 3.18 / 2.44 | 0.26 / 0.44 |
 | Jul 2023 | 744 | -0.35 | 1.49 | -385 | 1.29 | -0.19 | 0.44 | 1.16 | 3.61 / 2.78 | 0.25 / 0.43 |
 | Jul 2024 | 744 | -2.66 | 3.26 | -65 | 0.95 | -0.08 | 0.55 | 0.63 | 5.01 / 3.46 | 0.10 / 0.42 |
-| 2025 | 8,760 | -6.87 | 5.78 | 523 | 0.90 | -0.08 | 0.79 | -1.14 | 7.31 / 3.40 | -0.51 / 0.40 |
+| 2025 | 8,760 | -6.87 | 5.78 | 383 | 0.98 | -0.06 | 0.91 | -1.14 | 7.31 / 2.45 | -0.51 / 0.55 |
 | Jan–Jun 2026 | 4,343 | -9.58 | 7.85 | 515 | 1.02 | -0.07 | 0.95 | -1.85 | 9.74 / 2.84 | -0.93 / 0.50 |
+| 2025, CAISO's battery data | 8,760 | -6.87 | 6.32 | 377 | 0.90 | -0.06 | 0.91 | -0.58 | 7.31 / 2.45 | -0.51 / 0.56 |
 
 2025 by Pacific hour ending: mean actual − forecast, charging and discharging (MW).
 
 | Hour | Actual − forecast | Charging | Discharging |
 | :-- | --: | --: | --: |
-| 1 | 457 | 40 | 1,041 |
-| 2 | 484 | 57 | 701 |
-| 3 | 691 | 186 | 256 |
-| 4 | 722 | 392 | 73 |
-| 5 | 498 | 433 | 53 |
-| 6 | 361 | 200 | 206 |
-| 7 | 429 | 28 | 930 |
-| 8 | 1,320 | 55 | 1,505 |
-| 9 | 3,224 | 1,115 | 443 |
-| 10 | 4,693 | 3,150 | 41 |
-| 11 | 5,474 | 4,521 | 11 |
-| 12 | 5,819 | 5,260 | 4 |
-| 13 | 5,559 | 5,589 | 2 |
-| 14 | 4,821 | 5,233 | 2 |
-| 15 | 3,622 | 4,313 | 2 |
-| 16 | 2,100 | 2,859 | 27 |
-| 17 | 1,084 | 1,450 | 411 |
-| 18 | 451 | 626 | 1,129 |
-| 19 | 76 | 113 | 2,189 |
-| 20 | -60 | 0 | 4,065 |
-| 21 | -46 | 1 | 5,685 |
-| 22 | 40 | 0 | 5,376 |
-| 23 | 179 | 3 | 4,329 |
-| 24 | 307 | 16 | 2,351 |
+| 1 | 457 | 37 | 726 |
+| 2 | 484 | 162 | 264 |
+| 3 | 691 | 392 | 71 |
+| 4 | 722 | 460 | 47 |
+| 5 | 498 | 224 | 162 |
+| 6 | 361 | 37 | 804 |
+| 7 | 429 | 51 | 1,602 |
+| 8 | 1,320 | 940 | 511 |
+| 9 | 3,224 | 3,007 | 46 |
+| 10 | 4,693 | 4,442 | 15 |
+| 11 | 5,474 | 5,210 | 7 |
+| 12 | 5,819 | 5,570 | 3 |
+| 13 | 5,559 | 5,272 | 2 |
+| 14 | 4,821 | 4,441 | 1 |
+| 15 | 3,622 | 3,153 | 3 |
+| 16 | 2,100 | 1,467 | 126 |
+| 17 | 1,084 | 626 | 1,030 |
+| 18 | 451 | 113 | 2,240 |
+| 19 | 76 | 0 | 4,119 |
+| 20 | -60 | 0 | 5,711 |
+| 21 | -46 | 1 | 5,414 |
+| 22 | 40 | 0 | 4,442 |
+| 23 | 179 | 8 | 2,427 |
+| 24 | 307 | 34 | 1,059 |

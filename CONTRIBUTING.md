@@ -16,10 +16,12 @@
 - `data/raw/` and `data/processed/` are gitignored. Run one download at a time.
 - Operator data (approved 2026-10-28 for the Q5 check only: CAISO OASIS 2025 to Jan–Jun 2026,
   SPP 2025; extended 2026-10-30 to the CAISO months needed to date CISO's one-hour lag, back to
-  2016) is cached under `data/raw/operators/`. SPP files keep their own names. OASIS names
+  2016, and to CAISO's own 2025 battery output from Today's Outlook) is cached under
+  `data/raw/operators/`. SPP files keep their own names. OASIS names
   its files by request time, so CAISO files are named by run, month and the UTC window
-  requested. `results/operator_files.csv` records each file's URL, size, download time and
-  SHA-256.
+  requested. Today's Outlook calls every day's file `fuelsource.csv`, so those are cached as
+  `CAISO_OUTLOOK_fuelsource_<date>.csv`. `results/operator_files.csv` records each file's URL,
+  size, download time and SHA-256.
 
 ## Tests
 - Tests never touch the network. `tests/conftest.py` blocks sockets; use small saved files in
@@ -51,8 +53,12 @@
   `data/load_shedding.csv` (tracked) records, with a source and quote, whether each
   non-hurricane event had documented load shedding (such events are marked † in Q3).
 - `src/grid_audit/operators.py` (pure), `download_operators.py` and `operator_check.py`: the
-  operators' own load and forecasts, and `results/operator_check.md`. `ciso_check.py`: when
+  operators' own load and forecasts, and `results/operator_check.md`. `storage.py`: storage
+  columns read straight from the cached BALANCE files. `battery_check.py`: the exploratory,
+  not pre-registered check of every BA's forecast gap against battery charging,
+  `results/battery_check.md`. `ciso_check.py`: when
   CISO's demand runs an hour late, and CAISO's forecast gap against battery charging,
   `results/ciso_check.md`. The verified corrections (`operators.CISO_LATE_SPANS`,
-  `SWPP_REPLACED_DAYS`) feed only the audit's "Verified corrections" robustness variant.
+  `SWPP_REPLACED_DAYS`) and CISO's charging feed only the audit's "Verified corrections",
+  "CISO without charging" and "All corrections" robustness variants.
 - `tests/`: tests and saved sample files.

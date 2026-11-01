@@ -5,6 +5,7 @@ data/processed/balance.parquet, and writes results/audit.md and results/figures/
 PNG with the CSV it plots). Reads only cached files.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,8 +32,10 @@ from grid_audit.operators import (
     CISO_LATE_SPANS,
     OPERATORS_DIR,
     SWPP_REPLACED_DAYS,
+    charging_removed,
     demand_moved_back,
     forecast_replaced,
+    moved_back,
     read_spp,
     spp_issues,
     spp_name,
@@ -48,6 +51,7 @@ from grid_audit.stats import (
     spearman,
     theil_sen_slope,
 )
+from grid_audit.storage import all_storage, charging
 
 WEATHER_EVENTS_PATH = Path("data/weather_events.csv")
 LOAD_SHEDDING_PATH = Path("data/load_shedding.csv")  # documented load shedding per event
@@ -76,6 +80,11 @@ VARIANTS = {
     "Verified corrections": "CISO demand moved back 1 h where EIA-930 has it an hour late; "
     "SWPP forecast from 2025-05-07 replaced by SPP's own day-ahead forecast; all rules "
     "re-applied",
+    # User, 2026-10-30, after CISO's other-fuel column was checked against CAISO's batteries.
+    "CISO without charging": "CISO's battery charging (from its other-fuel net generation, "
+    "July 2018 on) taken out of its demand; all rules re-applied",
+    "All corrections": "Verified corrections, then CISO's charging taken out of its demand; "
+    "all rules re-applied",
 }
 MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
@@ -262,7 +271,8 @@ def robustness_row(run: Run) -> dict[str, object]:
     final = yearly.xs(YEAR, level="year")
     panel = panel_bas(yearly)
     by_year = panel_years(yearly, panel)
-    verdicts = ba_trends(yearly)["verdict"].value_counts()
+    trends = ba_trends(yearly)
+    verdicts = trends["verdict"].value_counts()
     points = demand_growth(yearly)
     national = trend(by_year.index, by_year["national"])
     return {
@@ -280,6 +290,8 @@ def robustness_row(run: Run) -> dict[str, object]:
         "losing": int((final["skill"] < 0).sum()),
         "losing_bas": sorted(final.index[final["skill"] < 0]),
         "skill": final["skill"],
+        "yearly": yearly[["mape", "skill"]],
+        "trends": trends,
         "eligible": len(final),
         "panel": len(panel),
         "tested": int(verdicts.sum()),
@@ -508,6 +520,7 @@ class Results:
     usable_total: int
     shedding: pd.DataFrame
     corrections: dict[str, int]
+    charging: dict[str, float]
 
 
 def q1_section(r: Results) -> list[str]:
@@ -609,7 +622,10 @@ def q2_section(r: Results) -> list[str]:
         "Robustness section shows it for every variant. With the two verified data corrections "
         "(CISO's late demand, SWPP's forecast) it is "
         f"{r.robustness['Verified corrections']['national_verdict']} (p = "
-        f"{r.robustness['Verified corrections']['national_p']:.3f}).",
+        f"{r.robustness['Verified corrections']['national_p']:.3f}); with CISO's battery "
+        "charging also taken out of its demand, "
+        f"{r.robustness['All corrections']['national_verdict']} (p = "
+        f"{r.robustness['All corrections']['national_p']:.3f}).",
         f"- Among the ten panel years (1: the highest error), {rank_text} on the panel median, "
         f"and {national_rank_text} on the national figure.\n",
         markdown_table(["Year", "Panel median MAPE (%)", "Panel national WAPE (%)"], panel_rows)
@@ -1015,47 +1031,83 @@ def robustness_section(r: Results) -> list[str]:
     ]
 
 
+CORRECTED_RUNS = ("Main", "Verified corrections", "CISO without charging", "All corrections")
+
+
 def corrections_text(r: Results) -> list[str]:
-    """What the verified-corrections variant changes, against the main run."""
-    v, m, c = r.robustness["Verified corrections"], r.robustness["Main"], r.corrections
-    stopped = sorted(set(m["losing_bas"]) - set(v["losing_bas"]))
-    started = sorted(set(v["losing_bas"]) - set(m["losing_bas"]))
+    """What the verified corrections and the charging variants change, against the main run."""
+    runs = {name: r.robustness[name] for name in CORRECTED_RUNS}
+    main, c, g = runs["Main"], r.corrections, r.charging
 
-    def ranks(row: dict[str, object]) -> str:
-        return f"{row['median_ranks'][YEAR]} and {row['national_ranks'][YEAR]}"
+    def ciso(row: dict[str, object], column: str) -> str:
+        yearly = row["yearly"]
+        value = yearly.loc[("CISO", YEAR), column] if ("CISO", YEAR) in yearly.index else None
+        return fmt(value if value is not None else float("nan"), 2)
 
-    def trend_text(row: dict[str, object]) -> str:
-        return (
-            f"{fmt(row['national_slope'], 3)} pp/yr, p = {row['national_p']:.3f} "
-            f"({row['national_verdict']})"
+    def ciso_trend(row: dict[str, object]) -> str:
+        if "CISO" not in row["trends"].index:
+            return "–"
+        t = row["trends"].loc["CISO"]
+        return f"{fmt(t['slope'], 2)} ({t['verdict']})"
+
+    lines = {
+        f"{YEAR} rank among the panel years, median / national": lambda v: (
+            f"{v['median_ranks'][YEAR]} / {v['national_ranks'][YEAR]}"
+        ),
+        "National panel slope (pp/yr)": lambda v: fmt(v["national_slope"], 3),
+        "National panel trend p (verdict)": lambda v: (
+            f"{v['national_p']:.3f} ({v['national_verdict']})"
+        ),
+        f"BAs losing to the naive forecast in {YEAR}": lambda v: str(v["losing"]),
+        f"CISO MAPE {YEAR} (%)": lambda v: ciso(v, "mape"),
+        f"CISO skill {YEAR}": lambda v: ciso(v, "skill"),
+        "CISO MAPE trend 2016–2025, pp/yr (verdict)": ciso_trend,
+    }
+    rows = [[label, *(get(v) for v in runs.values())] for label, get in lines.items()]
+    changes = []
+    for name, v in list(runs.items())[1:]:
+        stopped = sorted(set(main["losing_bas"]) - set(v["losing_bas"]))
+        started = sorted(set(v["losing_bas"]) - set(main["losing_bas"]))
+        changes.append(
+            f"{name}: no longer losing {', '.join(stopped) or 'none'}; newly losing "
+            f"{', '.join(started) or 'none'}"
         )
-
-    skills = "; ".join(
-        f"{ba} {fmt(m['skill'].get(ba, float('nan')), 2)} → "
-        f"{fmt(v['skill'].get(ba, float('nan')), 2)}"
-        for ba in ("CISO", "SWPP")
-    )
     spans = ", ".join(f"{a:%Y-%m-%d %H:%M} to {b:%Y-%m-%d %H:%M}" for a, b in CISO_LATE_SPANS)
     return [
-        "### Verified corrections\n",
-        "Requested by the user on 2026-10-30: the audit re-run with the two data errors the "
-        "operator checks verified, and every rule re-applied. The main run stays as published.\n",
-        f"- CISO: demand moved back one hour in the late spans of `results/ciso_check.md` "
+        "### Verified corrections and battery charging\n",
+        "Requested by the user on 2026-10-30: the audit re-run with the data errors the "
+        "operator checks verified, and with CISO's battery charging taken out of its demand, "
+        "every rule re-applied each time. The main run stays as published.\n",
+        f"- CISO's late demand: moved back one hour in the late spans of `results/ciso_check.md` "
         f"(UTC hour ends {spans}): {fmt(c['ciso_moved'], 0)} hours. The last hour of each span "
         "needs a value the data do not have, so the move leaves "
         f"{fmt(c['ciso_blanked'], 0)} more hours blank.",
-        f"- SWPP: the forecast for the local days {SWPP_REPLACED_DAYS[0]} to "
+        f"- SWPP's forecast: for the local days {SWPP_REPLACED_DAYS[0]} to "
         f"{SWPP_REPLACED_DAYS[1]} replaced by SPP's own day-ahead forecast (the 03:00 issue of the "
         f"day before, as in `results/operator_check.md`): {fmt(c['swpp_replaced'], 0)} hours, of "
         f"which {fmt(c['swpp_missing'], 0)} lack SPP's value. Replacing is clean enough to use: "
         "SPP's files cover the hours, and before 7 May EIA's own SWPP forecast followed this "
-        "series closely, though rarely exactly (it carries another issue).",
-        f"- **{YEAR} ranks** among the ten panel years (panel median and national): "
-        f"{ranks(v)}, against {ranks(m)} in the main run.",
-        f"- **National panel trend:** {trend_text(v)}, against {trend_text(m)}.",
-        f"- **BAs losing to the naive forecast in {YEAR}:** {v['losing']}, against "
-        f"{m['losing']}. No longer losing: {', '.join(stopped) or 'none'}; newly losing: "
-        f"{', '.join(started) or 'none'}. Skill in {YEAR}, main → corrected: {skills}.\n",
+        "series closely, though rarely exactly (it carries another issue). What changed on 7 May "
+        "is not known.",
+        "- CISO's charging: −(its other-fuel net generation) where that is below 0, which "
+        "matches CAISO's own battery output (`results/ciso_check.md`), taken out of its demand "
+        "in the same hour. In 2025 that column runs an hour late together with demand, so the "
+        "same EIA hour holds both; this is taken to hold in every late span (see the CISO check "
+        'for the evidence before 2025). "All corrections" moves both back. EIA-930 has fuel '
+        "types from "
+        f"July 2018: {fmt(g['with'], 0)} CISO hours in 2018–2025 have a value and "
+        f"{fmt(g['without'], 0)} do not (kept as published): CISO left the column blank from "
+        "October 2019 to August 2020, when batteries were small, and only "
+        f"{fmt(g['without_recent'], 0)} hours lack it from 2021 on. Mean charging taken out in "
+        f'{YEAR}: {fmt(g["mean_final"], 0)} MW. "CISO without charging" applies only this '
+        'correction; "All corrections" applies all three.\n',
+        markdown_table(["", *runs], rows) + "\n",
+        f"Changes in who loses to the naive forecast in {YEAR}, against the main run: "
+        + "; ".join(changes)
+        + ".\n",
+        "Exploratory, not in the pre-registered plan: whether any other BA that reports "
+        "batteries has a forecast gap that tracks charging as CISO's does "
+        "(`results/battery_check.md`; none does).\n",
     ]
 
 
@@ -1141,10 +1193,11 @@ def all_runs(
     local: pd.DataFrame,
     applied: Applied,
     ba_events: pd.DataFrame,
-    corrected: pd.DataFrame,
+    tables: dict[str, Callable[[], pd.DataFrame]],
 ) -> tuple[Run, dict[str, dict[str, object]]]:
-    """The main run, and the robustness row of every variant. Only the main run's hours are
-    kept, to save memory."""
+    """The main run, and the robustness row of every variant; `tables` builds the hourly table
+    of each variant that changes the data, which then has every rule re-applied. Only the main
+    run's hours are kept, and each table is built when it is run, to save memory."""
     rows: dict[str, dict[str, object]] = {}
     for name, rules in variant_rules(hourly, applied).items():
         run = audit_run(hourly, local, rules)
@@ -1153,13 +1206,33 @@ def all_runs(
             main_run = run
     if not main_run.usable.equals(applied.usable):
         raise RuntimeError("the main run does not reproduce data_quality.apply_rules")
-    for name, table in (
-        ("EIA adjusted demand", adjusted_truth(hourly)),
-        ("Verified corrections", corrected),
-    ):
+    for name, build in {"EIA adjusted demand": lambda: adjusted_truth(hourly), **tables}.items():
+        table = build()
         rules = {k: v for k, v in apply_rules(table, ba_events).rules.items() if k != "R3b"}
         rows[name] = robustness_row(audit_run(table, local, rules))
     return main_run, rows
+
+
+def ciso_charging() -> pd.Series:
+    """CISO's battery charging (MW) by UTC hour end: its other-fuel net generation below 0 in
+    the cached BALANCE files, where CISO reports its batteries (results/ciso_check.md)."""
+    storage = all_storage()
+    return charging(storage[storage["ba"].eq("CISO")].set_index("utc")["other"])
+
+
+def charging_counts(hourly: pd.DataFrame, local: pd.DataFrame, charge: pd.Series) -> dict:
+    """CISO's hours in YEARS from July 2018 with and without a charging value (and without one
+    from 2021 on, when batteries grew), and the mean charging taken out in YEAR (MW)."""
+    rows = hourly["ba"].eq("CISO") & local["year"].isin(YEARS)
+    rows &= hourly["utc"] >= pd.Timestamp("2018-07-01 07:00", tz="UTC")
+    values = charge.reindex(hourly.loc[rows, "utc"]).to_numpy()
+    year = local.loc[rows, "year"].to_numpy()
+    return {
+        "with": int(pd.notna(values).sum()),
+        "without": int(pd.isna(values).sum()),
+        "without_recent": int((pd.isna(values) & (year >= 2021)).sum()),
+        "mean_final": float(pd.Series(values[year == YEAR]).mean()),
+    }
 
 
 def spp_forecast() -> pd.Series:
@@ -1174,9 +1247,22 @@ def main() -> None:
     weather = read_weather_events(WEATHER_EVENTS_PATH)
     local = local_hours(hourly["local"])
     applied = apply_rules(hourly, ba_events)
-    corrected, corrections = verified_corrections(hourly, local, spp_forecast())
-    main_run, robustness = all_runs(hourly, local, applied, ba_events, corrected)
-    del corrected
+    spp, charge = spp_forecast(), ciso_charging()
+    corrections: dict[str, int] = {}
+
+    def corrected() -> pd.DataFrame:
+        table, counts = verified_corrections(hourly, local, spp)
+        corrections.update(counts)
+        return table
+
+    tables = {
+        "Verified corrections": corrected,
+        "CISO without charging": lambda: charging_removed(hourly, "CISO", charge),
+        "All corrections": lambda: charging_removed(
+            corrected(), "CISO", moved_back(charge, CISO_LATE_SPANS)
+        ),
+    }
+    main_run, robustness = all_runs(hourly, local, applied, ba_events, tables)
 
     yearly = main_run.yearly
     top = largest_bas(hourly)
@@ -1219,6 +1305,7 @@ def main() -> None:
         usable_total=int(applied.usable.sum()),
         shedding=read_load_shedding(LOAD_SHEDDING_PATH),
         corrections=corrections,
+        charging=charging_counts(hourly, local, charge),
     )
     write_figures(results)
     REPORT_PATH.write_text(render_audit(results, hourly), encoding="utf-8")

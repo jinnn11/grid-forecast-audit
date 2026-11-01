@@ -7,25 +7,24 @@ Writes results/ciso_check.md. Reads only cached files; operator_check writes the
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO
 
 import pandas as pd
 
 from grid_audit.audit import MONTHS
-from grid_audit.balance import UTC_FORMAT, to_mw
 from grid_audit.calendar import local_hours
 from grid_audit.check import fmt, markdown_table
-from grid_audit.download import RAW_DIR, balance_file_names
 from grid_audit.operators import (
     CAISO_HISTORY_MONTHS,
     CAISO_MONTHS,
     CAISO_PINNED_MONTHS,
     CAISO_RUNS,
     CAISO_SAMPLE_MONTHS,
+    CAISO_SPELL_MONTHS,
     CISO_LATE_SPANS,
     HOUR,
     NAIVE_HOURS,
     OPERATORS_DIR,
+    OUTLOOK_DAYS,
     PACIFIC,
     alignment,
     caiso_series,
@@ -33,35 +32,22 @@ from grid_audit.operators import (
     day_runs,
     lead_by_month,
     moved,
+    moved_back,
     oasis_file,
+    outlook_name,
     ramp_match,
     ramp_runs,
     read_oasis,
+    read_outlook,
     score,
+    series_match,
 )
 from grid_audit.quality_rules import PARQUET_PATH
+from grid_audit.storage import all_storage, charging
 
 REPORT_PATH = Path("results/ciso_check.md")
 AUDIT_LEAD_YEARS = (2023, 2024, 2025)  # CISO's losing years, where the audit's Q5 check ran
-STORAGE_COLUMNS = {
-    "Net Generation (MW) from Battery Storage": "battery",
-    "Net Generation (MW) from Other Fuel Sources": "other",
-}
-STORAGE_FILES = balance_file_names((2018, 2), (2026, 1))  # fuel types start in July 2018
 EDGE_HOURS = 2  # hours shown on each side of a switch
-
-
-def read_storage(source: str | Path | IO[str], ba: str = "CISO") -> pd.DataFrame:
-    """The BA's net generation from battery storage and from other fuel sources (MW) by UTC hour
-    end, from one BALANCE file: NaN where blank, or where the file lacks the column."""
-    wanted = {"Balancing Authority", "UTC Time at End of Hour", *STORAGE_COLUMNS}
-    raw = pd.read_csv(source, usecols=lambda column: column in wanted, dtype=str)
-    raw = raw[raw["Balancing Authority"].eq(ba)]
-    utc = pd.to_datetime(raw["UTC Time at End of Hour"], format=UTC_FORMAT, utc=True)
-    table = pd.DataFrame(index=pd.DatetimeIndex(utc, name="utc"))
-    for column, name in STORAGE_COLUMNS.items():
-        table[name] = to_mw(raw[column]).to_numpy() if column in raw.columns else float("nan")
-    return table
 
 
 def ciso_hours(hourly: pd.DataFrame) -> pd.DataFrame:
@@ -125,6 +111,8 @@ def fetched_as(month: pd.Period) -> str:
         return "sample"
     if month in CAISO_PINNED_MONTHS:
         return "pin-down"
+    if month in CAISO_SPELL_MONTHS:
+        return "spell check"
     return "earlier check"
 
 
@@ -179,9 +167,9 @@ def edge_rows(eia: pd.DataFrame, caiso: pd.DataFrame) -> list[list[str]]:
     return rows
 
 
-def unchecked_spells(eia: pd.DataFrame, min_days: int = 2) -> pd.DataFrame:
+def flagged_spells(eia: pd.DataFrame, min_days: int = 2) -> pd.DataFrame:
     """Runs of at least `min_days` days, outside every late span, on which EIA's forecast fits
-    EIA's demand best moved +1 h: possible short lags that CAISO's data were not fetched for."""
+    EIA's demand best moved +1 h: possible short lags, to check against CAISO's data."""
     days = lead_by_month(eia["forecast"], eia["demand"], eia["day"])["best"]
     days = days[days.index >= pd.Timestamp("2016-01-01")]
     runs = day_runs(days.astype("Int64"))
@@ -310,12 +298,21 @@ def lag_section(
         "; ".join(f"{r.day:%Y-%m-%d} ({r.place}, best {r.shift:+d} h)" for r in odd.itertuples())
         or "none"
     )
-    spell_text = (
-        ", ".join(
-            f"{r.first:%Y-%m-%d}" + ("" if r.first == r.last else f" to {r.last:%Y-%m-%d}")
-            for r in spells.itertuples()
-        )
-        or "none"
+    by_day = verdicts.set_index("day")["shift"]
+    spell_parts, spell_late, spell_checked = [], 0, 0
+    for r in spells.itertuples():
+        shifts = by_day[(by_day.index >= r.first) & (by_day.index <= r.last)]
+        spell_late += int(shifts.eq(1).sum())
+        spell_checked += len(shifts)
+        span = f"{r.first:%Y-%m-%d}" + ("" if r.first == r.last else f" to {r.last:%Y-%m-%d}")
+        spell_parts.append(f"{span} ({shifts.eq(1).sum()} of {r.days} days late in CAISO's data)")
+    spell_text = ", ".join(spell_parts) or "none"
+    spell_verdict = (
+        "On every one of those days EIA's demand matches CAISO's load as published, so the "
+        "spells are noise in EIA's forecast-against-demand check, not late demand; the spans "
+        "above are the whole timeline."
+        if spell_late == 0 and spell_checked == spells["days"].sum()
+        else "Spells not wholly on time in CAISO's data are not in the spans above."
     )
     span_rows = [
         [
@@ -396,12 +393,218 @@ def lag_section(
         "switch (2025-12-02 16:00–23:00 UTC) EIA's values match neither CAISO hour closely; they "
         "are counted as late, the nearer of the two.\n",
         "Outside the spans, EIA's own check finds short runs (two days or more) that fit best "
-        f"at +1 h: {spell_text}. CAISO's data for them were not fetched, so they are neither "
-        "confirmed nor corrected.\n",
+        f"at +1 h. Each was checked against CAISO's data for its month: {spell_text}. "
+        f"{spell_verdict}\n",
     ]
 
 
-def gap_section(periods: list[GapPeriod], profile: pd.DataFrame, reporting: pd.DataFrame):
+def caiso_batteries() -> pd.Series:
+    """CAISO's own net battery output (MW) by UTC hour end for OUTLOOK_DAYS, from the cached
+    Today's Outlook files."""
+    days = [
+        read_outlook(OPERATORS_DIR / "caiso_outlook" / outlook_name(day), day)
+        for day in OUTLOOK_DAYS
+    ]
+    hourly = pd.concat(days)
+    return hourly[~hourly.index.duplicated()].sort_index()
+
+
+def timing_sensitivity(eia: pd.DataFrame, other: pd.Series) -> pd.DataFrame:
+    """CISO's MAPE per local year 2021–2025 (all hours with values) against demand moved back
+    in the late spans and less charging, with the other-fuel series moved back too (as the
+    audit's variants assume) or left as published (on time)."""
+    demand = moved_back(eia["demand"], CISO_LATE_SPANS)
+    year = eia["day"].dt.year
+    rows = {}
+    for name, series in (("moved", moved_back(other, CISO_LATE_SPANS)), ("published", other)):
+        truth = demand - charging(series).reindex(eia.index).fillna(0)
+        rows[name] = {
+            y: score(eia["forecast"][year.eq(y)], truth[year.eq(y)])["mape"]
+            for y in range(2021, 2026)
+        }
+    return pd.DataFrame(rows)
+
+
+def battery_months(other: pd.Series, batteries: pd.Series) -> pd.DataFrame:
+    """Per Pacific month, over hours with both: mean charging and discharging (MW) in CISO's
+    other-fuel net generation and in CAISO's battery output."""
+    both = other.notna() & batteries.reindex(other.index).notna()
+    eia, caiso = other[both], batteries.reindex(other.index)[both]
+    month = (eia.index - HOUR).tz_convert(PACIFIC).month
+    table = pd.DataFrame(
+        {
+            "eia_charging": (-eia).clip(lower=0),
+            "caiso_charging": (-caiso).clip(lower=0),
+            "eia_discharging": eia.clip(lower=0),
+            "caiso_discharging": caiso.clip(lower=0),
+        }
+    )
+    return table.groupby(month).mean()
+
+
+BATTERY_MATCH_CORR = 0.95  # the check counts as a match at or above this, at the best shift
+
+
+def other_timing(other: pd.Series, batteries: pd.Series, caiso: pd.DataFrame) -> pd.DataFrame:
+    """Per Pacific month from 2021: whether CISO's other-fuel series is on time or an hour late.
+    Where CAISO's battery output exists (2025 on), the correlation with it as published and
+    with it moved +1 h (EIA's value for t against CAISO's for t − 1); otherwise, indirectly, the
+    R² of CAISO's own actual − forecast gap on charging taken from EIA's value for the same hour
+    and for the hour after."""
+    rows = {}
+    month = pd.Series((other.index - HOUR).tz_convert(PACIFIC).strftime("%Y-%m"), other.index)
+    gap = caiso["actual"] - caiso["forecast"]
+    for label, part in other.groupby(month):
+        if label < "2021-01":
+            continue
+        hours = part.index
+        if batteries.reindex(hours).notna().sum() > 24 * 20:
+            match = series_match(part, batteries, shifts=(0, 1))
+            on_time, late, source = match.loc[0, "corr"], match.loc[1, "corr"], "batteries"
+        elif gap.reindex(hours).notna().sum() > 24 * 20:
+            g = gap.reindex(hours)
+            on_time = charging_fit(g, part)["r2"]
+            late = charging_fit(g, moved(other, hours, -1))["r2"]
+            source = "forecast gap"
+        else:
+            continue
+        rows[label] = {"source": source, "on_time": on_time, "late": late}
+    table = pd.DataFrame.from_dict(rows, orient="index")
+    return table.assign(
+        verdict=table["late"].gt(table["on_time"]).map({True: "late", False: "on time"})
+    )
+
+
+def battery_section(
+    match: pd.DataFrame,
+    aligned: pd.DataFrame,
+    months: pd.DataFrame,
+    timing: pd.DataFrame,
+    sensitivity: pd.DataFrame,
+) -> list[str]:
+    match_rows = [
+        [
+            "as published" if k == 0 else f"as published, CAISO moved {k:+d} h",
+            fmt(m.hours, 0),
+            fmt(m["corr"], 3),
+            fmt(m.mean_abs_diff, 0),
+            fmt(m.slope, 3),
+        ]
+        for k, m in match.iterrows()
+    ]
+    a = aligned.loc[0]
+    match_rows.append(
+        [
+            "moved back an hour in the late spans",
+            fmt(a.hours, 0),
+            fmt(a["corr"], 3),
+            fmt(a.mean_abs_diff, 0),
+            fmt(a.slope, 3),
+        ]
+    )
+    month_rows = [
+        [
+            MONTHS[month - 1],
+            fmt(r.eia_charging, 0),
+            fmt(r.caiso_charging, 0),
+            fmt(r.eia_discharging, 0),
+            fmt(r.caiso_discharging, 0),
+        ]
+        for month, r in months.iterrows()
+    ]
+    timing_rows = [
+        [
+            label,
+            "CAISO's batteries (correlation)" if t.source == "batteries" else "CAISO's gap (R²)",
+            fmt(t.on_time, 3),
+            fmt(t.late, 3),
+            t.verdict,
+        ]
+        for label, t in timing.iterrows()
+    ]
+    sensitivity_rows = [
+        [str(year), fmt(r.moved, 2), fmt(r.published, 2), fmt(r.published - r.moved, 2)]
+        for year, r in sensitivity.iterrows()
+    ]
+    holds = a["corr"] >= BATTERY_MATCH_CORR
+    verdict = (
+        "**It matches: CISO reports its batteries under `Other Fuel Sources`.**"
+        if holds
+        else "**It does not match closely enough to treat the column as CISO's batteries.**"
+    )
+    later = sensitivity["published"] - sensitivity["moved"]
+    widest = later.loc[2022:2023].abs().max()
+    return [
+        "### Is CISO's `Other Fuel Sources` its batteries?\n",
+        "EIA's documentation does not say. EIA-930's instructions define `OTH` as \"all other "
+        'energy sources" and add: "In cases where there are three or fewer generators in an '
+        "energy source category, and tariffs or other agreements require this information to be "
+        'masked, use the “other” category (“OTH”) for this generation" '
+        "(https://www.eia.gov/survey/form/eia_930/instructions.pdf). EIA's About page lists "
+        '"Battery storage added as an energy source (beginning January 1, 2025)" '
+        "(https://www.eia.gov/electricity/930-content/about.html). Neither, nor the reference "
+        "tables, says what CISO reports under `OTH`.\n",
+        "So the column was compared with CAISO's own battery output for 2025 (approved by the "
+        "user on 2026-10-30): the `Batteries` column of CAISO's Today's Outlook daily fuel-mix "
+        "files (https://www.caiso.com/outlook/history/YYYYMMDD/fuelsource.csv; public, no "
+        "account, login or terms), MW every 5 minutes, averaged per hour. Both are net output, "
+        "below 0 while charging. As published, EIA's values match CAISO's an hour earlier: the "
+        "column runs an hour late, as CISO's demand does. Moved back in the same late spans as "
+        f"demand, it matches CAISO's series as published. Match: correlation at least "
+        f"{BATTERY_MATCH_CORR}. {verdict} EIA's values are about "
+        f"{fmt(100 * a.slope, 0)}% of CAISO's (slope).\n",
+        markdown_table(
+            ["EIA's other-fuel series", "Hours", "Correlation", "Mean |difference| (MW)", "Slope"],
+            match_rows,
+        )
+        + "\n",
+        "By Pacific month, 2025, EIA's values moved back in the late spans (MW, means over all "
+        "hours with both):\n",
+        markdown_table(
+            [
+                "Month",
+                "EIA charging",
+                "CAISO charging",
+                "EIA discharging",
+                "CAISO discharging",
+            ],
+            month_rows,
+        )
+        + "\n",
+        "### When the other-fuel column runs late\n",
+        "Per month: on time or an hour late. From 2025 directly, against CAISO's batteries. "
+        "Before, only indirectly and only for the months of CAISO's load data: how well "
+        "charging from EIA's value for the same hour, or for the hour after, fits CAISO's own "
+        "actual − forecast gap (R²). The indirect test is weak where charging is small.\n",
+        markdown_table(
+            ["Month", "Checked against", "On time", "An hour late", "Verdict"],
+            timing_rows,
+            left_columns=2,
+        )
+        + "\n",
+        "The audit's charging variants take the column as late in every late span, as verified "
+        "for 2025. Before 2025 that is not settled: the indirect test agrees for July 2024 but "
+        "points the other way, weakly, for June–July 2022 and July 2023, and nothing covers "
+        "August 2023 to June 2024. CISO's MAPE with demand moved back and charging taken out "
+        "(all hours with values), with the column moved back too or left as published:\n",
+        markdown_table(
+            ["Year", "Moved back (%)", "As published (%)", "Difference (pp)"],
+            sensitivity_rows,
+        )
+        + "\n",
+        f"In 2022 and 2023 the choice changes CISO's MAPE by at most {fmt(widest, 2)} pp, so an "
+        "hour's error in the charging there barely matters. In 2024 and 2025 leaving the column "
+        f"as published adds {fmt(later.loc[2024], 2)} and {fmt(later.loc[2025], 2)} pp, as "
+        "expected where it is late.\n",
+    ]
+
+
+def gap_section(
+    periods: list[GapPeriod],
+    profile: pd.DataFrame,
+    reporting: pd.DataFrame,
+    battery: list[str],
+) -> list[str]:
     rows = []
     for p in periods:
         fit = p.fit or {}
@@ -437,8 +640,9 @@ def gap_section(periods: list[GapPeriod], profile: pd.DataFrame, reporting: pd.D
         "EIA-930's `Battery Storage` column (in the files from July 2024) is blank for CISO in "
         "every hour. CISO's `Other Fuel Sources` behaves like storage: below 0 in the middle "
         "of the day (charging) and above 0 in the evening (discharging), growing from tens of "
-        "MW in 2019 to about ±10 GW in 2026. It is used here as CISO's storage, which is an "
-        "inference from its pattern, not a label: charging is −other where other is below 0.\n",
+        "MW in 2019 to about ±10 GW in 2026. It is used here as CISO's storage (charging is "
+        "−other where other is below 0); the next subsection checks it against CAISO's own "
+        "battery output.\n",
         markdown_table(
             [
                 "Year",
@@ -449,10 +653,13 @@ def gap_section(periods: list[GapPeriod], profile: pd.DataFrame, reporting: pd.D
             report_rows,
         )
         + "\n",
+        *battery,
         "### Does the gap track charging?\n",
         "CAISO's day-ahead forecast against its own actual load, per fetched month and for "
-        "2025 and Jan–Jun 2026 (all hours with both). Months before July 2018 have no fuel "
-        "data, and CISO's other-fuel values are blank in July 2020. Fit: actual − forecast = "
+        "2025 and Jan–Jun 2026 (all hours with both), with charging from EIA's other-fuel "
+        "column (moved back where it is verified late, in 2025) and, last, from CAISO's own "
+        "battery output. Months before July 2018 have no fuel data, and CISO's other-fuel "
+        "values are blank in July 2020. Fit: actual − forecast = "
         "a + b × charging + c × discharging (MW), least squares over the hours with storage "
         "data. Less charging: the actual load minus charging. Skill against each truth's value "
         "24 hours earlier.\n",
@@ -516,11 +723,16 @@ DOCUMENTATION = [
 
 
 def findings(
-    checks: list[MonthCheck], periods: list[GapPeriod], verdicts: pd.DataFrame
+    checks: list[MonthCheck],
+    periods: list[GapPeriod],
+    verdicts: pd.DataFrame,
+    aligned: pd.DataFrame,
 ) -> list[str]:
     by_label = {p.label: p for p in periods}
     y25, y26 = by_label["2025"], by_label["Jan–Jun 2026"]
-    fit = y25.fit or {}
+    own = by_label["2025, CAISO's battery data"]
+    own_fit = own.fit or {}
+    aligned = aligned.loc[0]
     first, second = CISO_LATE_SPANS[0], CISO_LATE_SPANS[-1]
     sample_late = [c for c in checks if c.fetched == "sample" and c.ramps[1] > c.ramps[0]]
     return [
@@ -535,25 +747,35 @@ def findings(
         f"  - Samples (July of 2016–2024): late in "
         f"{', '.join(f'{c.month:%Y}' for c in sample_late)}; on time in the others. The "
         "switches were pinned with Sep 2016 and Jun 2022, and the start of the audit years "
-        "with Jan 2016.",
+        "with Jan 2016. The short 2020–2021 spells that EIA's own check flags are on time in "
+        "CAISO's data (May 2020, July 2020, May 2021).",
+        "- **CISO reports its batteries under EIA-930's `Other Fuel Sources`.** EIA's "
+        "documentation does not say so, but against CAISO's own 2025 battery output the "
+        f"column matches at correlation {fmt(aligned['corr'], 3)} (EIA's values about "
+        f"{fmt(100 * aligned['slope'], 0)}% of CAISO's) once moved back an hour: it runs an hour "
+        "late together with CISO's demand through 2025-12-02, and on time after. Before 2025 "
+        "its timing is checked only indirectly (see below).",
         f"- **Most of CAISO's own forecast gap is battery charging.** In 2025 CAISO's forecast "
-        f"is {fmt(abs(y25.bias), 1)}% below its actual load (all hours); the hourly gap follows "
-        f"charging almost MW for MW (b = {fmt(fit.get('charging', float('nan')), 2)}, R² = "
-        f"{fmt(fit.get('r2', float('nan')), 2)}) and not discharging (c = "
-        f"{fmt(fit.get('discharging', float('nan')), 2)}). Against actual load less charging "
-        f"the bias falls to {fmt(y25.bias_less, 1)}% in 2025 and {fmt(y26.bias_less, 1)}% in "
-        f"Jan–Jun 2026 (from {fmt(y25.bias, 1)}% and {fmt(y26.bias, 1)}%), the 2025 MAPE to "
-        f"{fmt(y25.mape_less, 2)}% (from {fmt(y25.mape, 2)}%), and CAISO's forecast beats the "
-        f"naive forecast (skill {fmt(y25.skill_less, 2)}, from {fmt(y25.skill, 2)}). In the "
-        "sampled months before 2021, with little storage, the bias was within ±1.1%.",
-        f"  - The rest, about {fmt(fit.get('intercept', float('nan')), 0)} MW in every hour, is "
-        "not explained here. One candidate is non-dispatchable pump load, which the forecast "
-        "leaves out (see the documentation below); whether the actual load includes it is not "
-        "documented, and EIA-930 has no CISO pumping series, so it is not tested.",
+        f"is {fmt(abs(own.bias), 1)}% below its actual load (all hours). With CAISO's own "
+        "battery data, the hourly gap follows charging almost MW for MW (b = "
+        f"{fmt(own_fit.get('charging', float('nan')), 2)}, R² = "
+        f"{fmt(own_fit.get('r2', float('nan')), 2)}) and not discharging (c = "
+        f"{fmt(own_fit.get('discharging', float('nan')), 2)}). Against actual load less "
+        f"charging the bias is {fmt(own.bias_less, 1)}% (from {fmt(own.bias, 1)}%), MAPE "
+        f"{fmt(own.mape_less, 2)}% (from {fmt(own.mape, 2)}%), and CAISO's forecast beats the "
+        f"naive forecast (skill {fmt(own.skill_less, 2)}, from {fmt(own.skill, 2)}). With EIA's "
+        f"column instead: bias {fmt(y25.bias_less, 1)}% in 2025 and {fmt(y26.bias_less, 1)}% in "
+        f"Jan–Jun 2026 (from {fmt(y26.bias, 1)}%), MAPE {fmt(y25.mape_less, 2)}%. In the sampled "
+        "months before 2021, with little storage, the bias was within ±1.1%.",
+        f"  - The rest, about {fmt(own_fit.get('intercept', float('nan')), 0)} MW in every "
+        "hour, is not explained here. One candidate is non-dispatchable pump load, which the "
+        "forecast leaves out (see the documentation below); whether the actual load includes it "
+        "is not documented, and EIA-930 has no CISO pumping series, so it is not tested.",
         "  - So the actual-load series counts charging as load and the day-ahead forecast does "
         "not (see the documentation below). EIA-930's CISO demand equals CAISO's actual load "
         "and its forecast equals CAISO's day-ahead forecast, so the audit's CISO error carries "
-        "the same mismatch. The audit is unchanged; this is reported, not corrected.",
+        "the same mismatch. The main run is unchanged; the audit's robustness section takes "
+        "charging out in two variants.",
     ]
 
 
@@ -590,14 +812,22 @@ def main() -> None:
             for run in CAISO_RUNS
         }
     )
-    storage = pd.concat([read_storage(RAW_DIR / name) for name in STORAGE_FILES])
-    storage = storage[~storage.index.duplicated()].sort_index()
+    storage = all_storage()
+    storage = storage[storage["ba"].eq("CISO")].drop(columns="ba").set_index("utc").sort_index()
+    batteries = caiso_batteries()
+    match = series_match(storage["other"], batteries)
+    aligned_other = moved_back(storage["other"], CISO_LATE_SPANS)
+    aligned = series_match(aligned_other, batteries, shifts=(0,))
+    # For CAISO's gap, EIA's column is moved back only where its timing is verified (2025).
+    start = pd.Timestamp("2025-01-01 09:00", tz="UTC")
+    late_2025 = tuple((max(a, start), b) for a, b in CISO_LATE_SPANS if b >= start)
+    verified = storage.assign(other=moved_back(storage["other"], late_2025))
 
     leads, lead_spans = year_leads(eia)
     checks = [check_month(eia, caiso, m, fetched_as(m)) for m in months]
     verdicts = day_verdicts(eia, caiso, months)
     lag = lag_section(
-        leads, lead_spans, checks, verdicts, edge_rows(eia, caiso), unchecked_spells(eia)
+        leads, lead_spans, checks, verdicts, edge_rows(eia, caiso), flagged_spells(eia)
     )
 
     def hours_of(first: str, last: str) -> pd.DataFrame:
@@ -611,12 +841,25 @@ def main() -> None:
         for m in CAISO_HISTORY_MONTHS
     ]
     periods += [
-        gap_period("2025", hours_of("2025-01-01", "2025-12-31"), storage),
-        gap_period("Jan–Jun 2026", hours_of("2026-01-01", "2026-06-30"), storage),
+        gap_period("2025", hours_of("2025-01-01", "2025-12-31"), verified),
+        gap_period("Jan–Jun 2026", hours_of("2026-01-01", "2026-06-30"), verified),
+        gap_period(
+            "2025, CAISO's battery data",
+            hours_of("2025-01-01", "2025-12-31"),
+            pd.DataFrame({"other": batteries}),
+        ),
     ]
-    profile = hour_profile(hours_of("2025-01-01", "2025-12-31"), storage)
-    gap = gap_section(periods, profile, storage_reporting(storage))
-    REPORT_PATH.write_text(render(lag + gap, findings(checks, periods, verdicts)), "utf-8")
+    profile = hour_profile(hours_of("2025-01-01", "2025-12-31"), verified)
+    battery = battery_section(
+        match,
+        aligned,
+        battery_months(aligned_other, batteries),
+        other_timing(storage["other"], batteries, caiso),
+        timing_sensitivity(eia, storage["other"]),
+    )
+    gap = gap_section(periods, profile, storage_reporting(storage), battery)
+    top = findings(checks, periods, verdicts, aligned)
+    REPORT_PATH.write_text(render(lag + gap, top), "utf-8")
     print(f"wrote {REPORT_PATH}")
 
 
