@@ -1,12 +1,13 @@
 # Grid forecast audit: day-ahead demand forecasts in EIA-930, 2016–2025
 
-Are US grid operators' day-ahead demand forecasts getting worse? In EIA-930's data they appear
-to, just barely. Three problems in EIA's published data account for that: the California ISO's
-(CISO) demand runs an hour late, Southwest Power Pool's (SWPP) forecast stops matching SPP's own
-from May 2025, and CISO's demand counts battery charging that its forecast leaves out. Once they
-are corrected, there is no sign that forecasts are getting worse. EIA-930 is the standard public
-source for hourly US grid data, so errors in it reach everyone who uses it. The corrections were
-added after the pre-registered results.
+Are US grid operators' day-ahead demand forecasts getting worse? There's no robust sign of it. In
+EIA-930, the standard public source of hourly US grid data, national error rises slightly, but
+the median across regions shows no clear trend and most pre-registered checks don't confirm the
+rise. Three problems in EIA-930 explain it: the California ISO's demand runs an hour late for
+about four of the ten years, it includes battery charging that its forecast leaves out, and the
+Southwest Power Pool forecast stops matching the operator's own in May 2025. With them corrected,
+in checks added after the pre-registered results, the trend is flat. Anyone using EIA-930
+inherits these problems.
 
 ![National day-ahead forecast error by year, 2016–2025, as published and with all corrections](results/figures/national_by_year.png)
 
@@ -20,37 +21,43 @@ in every year 2016–2025, as published in EIA-930 and with all three correction
 mean absolute percentage error against actual demand. *National*: total absolute error over
 total demand, either on the **50-BA panel** (BAs eligible in every year, used for trends) or
 over **all 53 BAs** eligible in 2025. *Naive forecast*: demand 24 hours earlier; *skill* below
-0 means a BA's forecast loses to it. *pp/yr*: percentage points per year.
+0 means a BA's forecast loses to it. *pp/yr*: percentage points per year. *CISO*, *SWPP*:
+EIA's codes for the California ISO and Southwest Power Pool; *CAISO* and *SPP* mean the
+operators' own data.
 
 - **As published, the national trend is weak and fragile; corrected, it is flat.** On the
-  50-BA panel, national error rises 0.061 pp/yr (Mann–Kendall p = 0.049, "worse"), and 2025 is
-  the worst of the ten years on both the panel median and the panel's national figure. The
-  median across BAs shows no clear trend (0.010 pp/yr, p = 0.474), and three of the five
+  50-BA panel, national error rises 0.061 pp/yr (Mann–Kendall p = 0.049, "worse"). The median
+  across the panel's BAs shows no clear trend (0.010 pp/yr, p = 0.474), and three of the five
   pre-registered robustness variants turn the national verdict to no clear trend (p = 0.074 to
   0.107). With all three corrections, the 50-BA national trend is 0.009 pp/yr (p = 0.721), and
-  2025 ranks 6th on the panel median and 8th on the national figure among the ten years.
-  Individual BAs move both ways: 10 worse and 10 better with all corrections (11 and 10 as
-  published), against about 2.6 of 52 expected by chance.
-- **CISO's demand runs an hour late** (the California ISO's area): from the start of EIA-930's
-  data (July 2015) to 2016-09-12, and from 2022-06-14 to 2025-12-02 except 2022-06-15 (Pacific
-  days). EIA's CISO forecast equals CAISO's own day-ahead forecast in every checked month, while
-  EIA's CISO demand matches CAISO's actual load an hour earlier: on 333 of 334 days from
-  2025-01-01 to 2025-12-02 (mean gap 0.62% moved, 3.25% as published) and on 514 of 515 checked
-  days inside the spans, while 454 of 458 checked days outside them are on time. The correction
-  starts on 2016-01-01 because the audit years do; CAISO's data were checked from January 2016.
-- **SWPP's forecast stops matching SPP's own from 2025-05-07.** Before that date, EIA's SWPP
-  forecast was within 2% of SPP's own day-ahead forecast on 122 of 125 days; from 7 May to 31
-  December it was more than 2% away on 219 of 238 days, at 1.11–1.14 times SPP's by monthly
-  median, while EIA's SWPP demand kept matching SPP's actual load (monthly medians
+  2025 falls from the worst of the ten years to 6th-worst on the panel median and 8th-worst on
+  the national figure. Individual BAs move both ways. Each of the 52 BAs with at least 8
+  eligible years was tested on its own yearly MAPE: 11 are worse (MAPE rising, Mann–Kendall
+  p < 0.05) and 10 better (falling, p < 0.05) as published, and 10 and 10 with all corrections.
+  By chance alone, about 2.6 of the 52 would reach p < 0.05.
+- **CISO's demand runs an hour late for about four of the ten years:** from at least
+  2016-01-01, where the check against CAISO's data begins, to 2016-09-12, and from 2022-06-14 to
+  2025-12-02 except 2022-06-15 (Pacific days); earlier months were not checked. EIA's CISO
+  forecast equals CAISO's own day-ahead forecast in every checked month, while EIA's CISO demand
+  matches CAISO's actual load an hour earlier: on 333 of 334 days from 2025-01-01 to 2025-12-02
+  (mean gap 0.62% moved, 3.25% as published) and on 514 of 515 checked days inside the spans,
+  while 454 of 458 checked days outside them are on time. The correction starts on 2016-01-01
+  because the audit years do.
+- **EIA-930's SWPP forecast stops matching SPP's own from 2025-05-07.** Before that date,
+  EIA's SWPP forecast was within 2% of SPP's own day-ahead forecast on 122 of 125 days; from
+  7 May to 31 December it was more than 2% away on 219 of 238 days, at 1.11–1.14 times SPP's by
+  monthly median, while EIA's SWPP demand kept matching SPP's actual load (monthly medians
   0.998–1.004). On the same 2025 hours, each against its own source's load, SPP's own forecast
   scores MAPE 1.71% (skill 0.58); the series in EIA-930 scores 7.79%, with a bias of 6.41%
-  (over-forecast). Why it changed is not
-  visible in the files.
+  (over-forecast). Why it changed is not visible in the files.
 - **CISO's demand counts battery charging; its forecast does not.** CISO reports its batteries
   under EIA-930's "Other Fuel Sources" (its "Battery Storage" column is blank): against CAISO's
   own 2025 battery output, that column matches at correlation 0.999 once moved back an hour.
-  CAISO removed battery charging from its forecast system's inputs in June 2021, and EIA's
-  instructions say charging belongs in net generation, not demand. In 2025 CAISO's forecast gap
+  CAISO removed battery charging from its forecast system's inputs in June 2021
+  ([CAISO, 22 June 2021, slide 44](https://www.caiso.com/documents/presentation-marketperformance-planningforum-jun222021.pdf)),
+  and EIA's instructions say charging belongs in net generation, not demand
+  ([EIA-930 instructions](https://www.eia.gov/survey/form/eia_930/instructions.pdf)); both are
+  quoted in [results/ciso_check.md](results/ciso_check.md). In 2025 CAISO's forecast gap
   follows charging almost MW for MW (b = 0.90, R² = 0.91); against actual load less charging,
   CAISO's bias goes from −6.9% to −0.6% and its MAPE from 7.31% to 2.45%. With all three
   corrections, CISO's 2025 MAPE in the audit falls from 8.28% to 2.35% and its skill rises from
@@ -80,8 +87,10 @@ Full results: [results/audit.md](results/audit.md). Operator checks:
   least 50% of its hours are usable: 53 BAs in 2025, a 50-BA panel eligible in every year (all 10
   largest BAs included), and 49 BAs for the demand-growth question. 4,582,331 hours are scored.
 - **Metrics,** with error e = forecast − demand: MAPE (primary), WAPE, bias, and skill =
-  1 − MAPE / naive MAPE on the same hours. Summaries are the median across BAs plus one national
-  figure, Σ|e| / Σ demand, so a few broken series cannot drive them.
+  1 − MAPE / naive MAPE on the same hours. Summaries are the median across BAs and one national
+  figure, Σ|e| / Σ demand. The median resists a few broken series; the national figure does not,
+  because it weights BAs by demand, and CISO's and SWPP's broken series moved it: on the 50-BA
+  panel its trend is 0.061 pp/yr as published and 0.009 pp/yr with all corrections.
 - **Questions:** Q1, accuracy in 2025; Q2, the trend (Theil–Sen slope, two-sided Mann–Kendall
   test); Q3, when forecasts miss (season and hour, holidays, 19 extreme-weather events chosen by
   a stated rule, extreme-demand days); Q4, demand growth against change in error; Q5, who loses
@@ -127,24 +136,26 @@ git diff edd06df -- docs/step3_audit_plan.md src/grid_audit/quality.py \
   src/grid_audit/quality_rules.py src/grid_audit/truth.py src/grid_audit/data_quality.py
 ```
 
+It should print nothing.
+
 Later changes, by commit date:
 
 | Committed | Commit | Change |
 | :-- | :-- | :-- |
-| 2026-10-28 | `a61ece2` | The audit, computed as planned. Choices where the plan is silent are listed under Notes in `results/audit.md`; Figure 4's y-axis range was a display choice made after the first draw. |
+| 2026-10-28 | `a61ece2` | The audit, computed as planned. Choices where the plan is silent are listed under Notes in `results/audit.md`. |
 | 2026-10-30 | `b0412db` | The national panel trend shown for every robustness variant, because the main run's "worse" verdict rests on p = 0.049, with the ranks of 2024 and 2025. Q3 marks Winter Storm Uri and the hurricanes, when outages cut demand. Operator data for CISO and SWPP, the plan's Q5 step 2. |
 | 2026-10-30 | `b59cc86` | CISO's late demand dated back to 2016 against CAISO's data; the "Verified corrections" variant; every event with documented load shedding marked, with sources in [data/load_shedding.csv](data/load_shedding.csv). |
 | 2026-11-01 | `09e45e6` | CISO's "Other Fuel Sources" verified as its batteries; the "CISO without charging" and "All corrections" variants; the exploratory battery check. |
 
 None of these changed a rule, a threshold, the event list or any number in the main run; they
 added variants, checks and caveats. The headline figure was added with this README and draws on
-two of the robustness runs.
+the main run and the All corrections variant.
 
 ### Operator cross-checks
 
 The plan's Q5 step 2 compares the largest BAs that lose to the naive forecast with the
-operator's own published load and day-ahead forecast. That meant CISO (2023–2025) and SWPP
-(2025); FPL (2016–2017) has no public hourly forecast archive that we know of.
+operator's own published load and day-ahead forecast. That meant CISO (2023–2025), SWPP (2025)
+and FPL (2016–2017); for FPL, no public archive of hourly forecasts was found.
 
 - **CAISO OASIS:** CAISO's day-ahead load forecast and actual load, for 2025 and January–June
   2026, plus sample months from 2016 to 2024 to date CISO's late demand (64 files).
@@ -194,11 +205,14 @@ variants' counts, is under Robustness in [results/audit.md](results/audit.md).
 
 ## Limitations
 
-- **The headline rests on variants added after the results.** The three corrections were added
-  after the pre-registered results had been computed and reviewed, and the main run stays as
-  published. Each correction was verified by comparing EIA-930 with the operator's own series,
-  not by its effect on forecast error, though Q5's forecast-shift check first pointed at CISO's
-  timing.
+- **The corrections were added after the results.** The three corrections were added after the
+  pre-registered results had been computed and reviewed, and the main run stays as published.
+  Each correction was verified by comparing EIA-930 with the operator's own series, not by its
+  effect on forecast error, though Q5's forecast-shift check first pointed at CISO's timing.
+- **The search for problems was one-sided.** Only BAs whose forecasts looked bad were checked
+  against operator data: the largest BAs that lose to the naive forecast. So the problems found
+  tend to lower errors when corrected, mostly in recent years, which tilts the corrected trend
+  down. A problem that made a forecast look better than it is would not have been found.
 - **Exploratory:** the check of whether any other BA's forecast gap tracks battery charging
   ([results/battery_check.md](results/battery_check.md)) is not in the plan. None does.
 - **Open: SWPP's change on 7 May 2025.** Its cause is unknown; what changed in the forecast

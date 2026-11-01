@@ -1182,7 +1182,8 @@ def render_audit(r: Results, hourly: pd.DataFrame) -> str:
 
 def national_lines(robustness: dict[str, dict[str, object]]) -> tuple[pd.DataFrame, str]:
     """The headline figure's data and caption: the panel's national figure per year as published
-    (the main run) and with all corrections, and each line's trend as in the robustness table."""
+    (the main run) and with all corrections, and each line's trend as in the robustness table.
+    The caption opens by saying that the corrections came after the pre-registered results."""
     rows = {"As published": robustness["Main"], "All corrections": robustness["All corrections"]}
     data = pd.DataFrame({label: row["national_by_year"] for label, row in rows.items()})
     trends = "; ".join(
@@ -1194,6 +1195,7 @@ def national_lines(robustness: dict[str, dict[str, object]]) -> tuple[pd.DataFra
     if len(panels) != 1:
         raise RuntimeError(f"the two runs' panels differ in size: {sorted(panels)}")
     caption = (
+        "The corrections were added after the pre-registered results.\n"
         f"The {panels.pop()}-BA panel (BAs eligible in every year {YEARS[0]}–{YEARS[-1]}); "
         f"error is Σ|e| / Σ demand over all of them.\nTrend: {trends}."
     )

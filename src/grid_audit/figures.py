@@ -172,7 +172,7 @@ def national_by_year(lines: pd.DataFrame, caption: str) -> None:
     if len(lines.columns) > len(colors):
         raise ValueError(f"at most {len(colors)} lines, got {len(lines.columns)}")
     with plt.rc_context(STYLE):
-        fig, ax = plt.subplots(figsize=(7.5, 4.6))
+        fig, ax = plt.subplots(figsize=(7.5, 4.9))
         for name, color in zip(lines.columns, colors, strict=False):
             ax.plot(
                 lines.index,
@@ -205,7 +205,7 @@ def national_by_year(lines: pd.DataFrame, caption: str) -> None:
         ax.set_ylabel("National error, Σ|e| / Σ demand")
         # Top down: title, caption, legend, then the plot.
         title = "National day-ahead forecast error by year, as published and corrected"
-        ax.set_title(title, pad=58)
+        ax.set_title(title, pad=72)
         ax.text(0, 1.09, caption, transform=ax.transAxes, color=INK_2, va="bottom")
         ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, borderaxespad=0.2)
         save(fig, lines, "national_by_year")

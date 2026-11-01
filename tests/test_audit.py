@@ -379,6 +379,7 @@ def test_national_lines() -> None:
     assert list(data.columns) == ["As published", "All corrections"]
     assert data.loc[2017].tolist() == [4.0, 3.0]
     assert caption == (
+        "The corrections were added after the pre-registered results.\n"
         "The 50-BA panel (BAs eligible in every year 2016–2025); error is Σ|e| / Σ demand over "
         "all of them.\nTrend: as published 0.061 pp/yr (p = 0.049, worse); all corrections "
         "0.009 pp/yr (p = 0.721, no clear trend)."
